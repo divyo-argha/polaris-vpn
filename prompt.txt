@@ -1,0 +1,387 @@
+polaris-node
+"Your True North in Digital Privacy."
+
+You are a senior Node.js engineer building a production-quality, open-source,
+self-hosted VPN CLI tool from scratch called polaris-node (or polaris if the
+name is taken on npm). License: Apache 2.0. Tagline: "Leave no trace."
+
+Build this autonomously, version by version, with complete working code at
+every stage. Do not use placeholders or TODOs. Each version must be fully
+functional and publishable to npm before moving to the next.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROJECT IDENTITY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Package name   : polaris-node
+Binary command : polaris
+Language       : Node.js ESM, no TypeScript
+Node version   : >=18
+License        : Apache 2.0
+Target OS      : Linux (primary), macOS (secondary), Windows (experimental)
+Target server  : Oracle Cloud Free Tier ARM VM (Ubuntu 22.04) — user-supplied
+Architecture   : Bring Your Own Server — polaris-node never operates relay
+                 infrastructure. Users supply their own VPS.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VERSION PLAN — BUILD ONE AT A TIME
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+v0.1  MVP — SSH SOCKS5 tunnel
+v0.2  TLS tunnel + DNS-over-HTTPS + leak checker
+v0.5  WireGuard full tunnel + server provisioning
+v1.0  AmneziaWG stealth mode + multi-peer + QR codes + kill switch
+
+Start with v0.1 only. Complete it fully before mentioning the next version.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VERSION 0.1 — MVP: SSH SOCKS5 TUNNEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IT DOES:
+Wraps SSH dynamic port forwarding (-D flag) into a beautiful CLI experience.
+Opens an encrypted SOCKS5 proxy on 127.0.0.1:1080 through any SSH server
+the user provides. No server software needed — just SSH access to any VPS.
+
+COMMANDS TO BUILD:
+
+  spectre start --server user@host [--port 1080]
+    1. Check and display current public IP (before)
+    2. Spawn: ssh -D 1080 -N -o StrictHostKeyChecking=no
+               -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes user@host
+    3. Wait for tunnel to be ready (retry connect to 127.0.0.1:1080)
+    4. Re-check public IP through the proxy to confirm it changed
+    5. Display: old IP → new IP, proxy address, uptime ticker
+    6. Save PID to ~/.spectre/tunnel.pid
+    7. Save config (server, port, start time) to ~/.spectre/config.json
+
+  spectre stop
+    Read PID from ~/.spectre/tunnel.pid, kill the process, clean up
+
+  spectre status
+    Show: tunnel up/down, current IP, server, uptime, proxy address
+
+  spectre check
+    Run a 3-point privacy report and print a pass/fail table:
+    1. IP check      — fetch https://api64.ipify.org?format=json
+    2. DNS leak      — resolve a known domain via Node dns.resolve,
+                       compare against expected (flag if ISP DNS detected)
+    3. IPv6 leak     — fetch https://ipv6.icanhazip.com with 3s timeout,
+                       warn if an IPv6 address is returned
+    Output: coloured table with ✓ PASS or ✗ FAIL per check
+
+  spectre add <alias> --server user@host
+    Save a named server profile to ~/.spectre/servers.json
+
+  spectre list
+    Show all saved server profiles
+
+  spectre use <alias>
+    Switch the active profile
+
+FILE STRUCTURE:
+
+  spectre/
+  ├── src/
+  │   ├── cli.js              # commander entry point, registers all commands
+  │   ├── commands/
+  │   │   ├── start.js
+  │   │   ├── stop.js
+  │   │   ├── status.js
+  │   │   ├── check.js
+  │   │   └── servers.js      # add / list / use
+  │   ├── tunnel/
+  │   │   └── ssh.js          # spawn ssh, PID management, readiness check
+  │   ├── net/
+  │   │   └── ip.js           # IP fetch, proxy-aware IP fetch, DNS check
+  │   └── ui/
+  │       └── display.js      # all chalk/ora/cli-table3 rendering helpers
+  ├── package.json
+  ├── README.md
+  ├── LICENSE                 # Apache 2.0
+  └── .gitignore
+
+DEPENDENCIES:
+
+  commander       CLI parsing
+  chalk           terminal colour (ESM import)
+  ora             spinners
+  cli-table3      formatted tables
+  node-fetch      HTTP requests
+  socks-proxy-agent  route IP check through SOCKS5 to verify tunnel works
+  conf            config + server profile storage (~/.spectre/)
+
+UX REQUIREMENTS:
+
+  - All output uses chalk: green = success, red = error, yellow = warning,
+    cyan = info, dim = secondary detail
+  - Every async operation shows an ora spinner
+  - Never crash with a raw stack trace — catch all errors, print friendly
+    message + dim underlying error text
+  - spectre start must print both the OLD ip and NEW ip so user can
+    confirm the tunnel is working
+  - All commands accept --json flag for machine-readable output
+  - --help output must be clean and match the README command reference
+
+ORACLE CLOUD CONTEXT (put in README):
+
+  The recommended free server is Oracle Cloud Always Free tier:
+  - ARM VM (A1.Flex): 2 OCPUs, 12 GB RAM — completely free forever
+  - 10 TB outbound bandwidth/month — more than enough for personal use
+  - Best regions from South/Southeast Asia: India (Hyderabad) ~30ms,
+    Singapore ~50ms, Japan (Tokyo) ~80ms
+  - Sign up at cloud.oracle.com — requires a credit card for verification
+    but charges nothing for Always Free resources
+  - After VM creation, spectre only needs SSH access: spectre start
+    --server ubuntu@<your-oracle-ip>
+
+SHARED SERVER MODEL (put in README):
+
+  One Oracle VM can serve multiple people:
+  - Light browsing (1–2 Mbps/user): 25–50 people comfortably
+  - YouTube/social (5 Mbps/user): 8–10 people simultaneously
+  - One person owns the VM, others get SSH keys or WireGuard configs
+    (WireGuard multi-peer is a v0.5 feature)
+  - Or each person creates their own free Oracle account for full isolation
+
+package.json MUST INCLUDE:
+
+  {
+    "name": "spectre",
+    "version": "0.1.0",
+    "type": "module",
+    "bin": { "spectre": "./src/cli.js" },
+    "engines": { "node": ">=18" },
+    "license": "Apache-2.0",
+    "keywords": ["vpn", "privacy", "tunnel", "socks5", "proxy",
+                 "cli", "wireguard", "self-hosted", "oracle-cloud"]
+  }
+
+README.md MUST INCLUDE:
+
+  1. Header: "spectre — Leave no trace." with Apache 2.0 badge
+  2. One paragraph description
+  3. Prerequisites (SSH access to any VPS; recommends Oracle Free Tier)
+  4. Install: npm install -g spectre
+  5. 30-second quickstart with real example commands
+  6. Full command reference table
+  7. Oracle Cloud Free Tier setup section (brief, link to oracle.com)
+  8. Shared server section (how many users, two models)
+  9. How it works (one paragraph on SSH SOCKS5 tunnel mechanics)
+  10. Trust model: user owns server, no telemetry, no central infra,
+      Apache 2.0 open source
+  11. Roadmap (v0.1 → v0.2 → v0.5 → v1.0 brief descriptions)
+  12. Contributing section
+  13. License: Apache 2.0
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VERSION 0.2 — TLS TUNNEL + DNS PROTECTION
+(build ONLY after v0.1 is complete and tested)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+New features over v0.1:
+
+1. TLS ENCRYPTED TUNNEL
+   Replace SSH SOCKS5 with a proper TLS 1.3 encrypted tunnel.
+   Ship a companion package spectre-server (separate npm package):
+     npx spectre-server start   — runs on the VPS, generates self-signed
+                                   TLS cert on first run, listens on :8443
+   The spectre CLI connects to spectre-server over TLS and routes
+   traffic through it. Fallback to SSH mode if TLS server not detected.
+
+2. DNS-OVER-HTTPS (DoH)
+   Intercept DNS queries locally using the dns2 package.
+   Start a local DNS resolver on 127.0.0.1:5353.
+   Forward all queries to Cloudflare 1.1.1.1 via HTTPS.
+   User-configurable resolver (1.1.1.1, 8.8.8.8, or custom).
+   This prevents ISP from seeing domain lookups even without WireGuard.
+
+   New commands:
+     spectre dns start    Start the local DoH resolver
+     spectre dns stop     Stop it
+     spectre dns status   Show resolver status and upstream
+
+3. AUTO-RECONNECT
+   Detect tunnel drop via keepalive pings every 30 seconds.
+   Auto-reconnect with exponential backoff (max 5 retries).
+   Emit a desktop notification (node-notifier) when reconnect happens.
+
+4. ENHANCED LEAK CHECK
+   Expand spectre check with:
+   - WebRTC leak detection hint (explain in output, link to browserleaks.com)
+   - Show which DNS server is being used (ISP vs DoH)
+   - Display tunnel mode (SSH / TLS)
+
+   New dependency: dns2, node-notifier
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VERSION 0.5 — WIREGUARD FULL TUNNEL
+(build ONLY after v0.2 is complete and tested)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+New features over v0.2:
+
+1. WIREGUARD TUNNEL
+   Full system-wide VPN using WireGuard — captures ALL OS traffic,
+   not just proxied apps. Requires sudo/admin.
+
+   spectre start --mode wireguard   Full system tunnel (needs sudo)
+   spectre start --mode proxy       TLS proxy fallback (no sudo)
+   spectre start                    Auto-detect best available mode
+
+   Implementation:
+   - Use wireguard-tools npm package for config generation
+   - Generate keypairs locally, push public key to server automatically
+   - On Linux: call wg and ip commands (via child_process)
+   - On macOS: use wireguard-go userspace implementation
+   - Create wg0 interface, set AllowedIPs = 0.0.0.0/0 for full tunnel
+   - Persist WireGuard config to ~/.spectre/wg/wg0.conf
+
+2. SERVER PROVISIONING — spectre deploy
+   One command to fully configure a fresh Ubuntu VPS as a WireGuard server:
+
+   spectre deploy --server ubuntu@<ip>
+
+   This command must:
+   a. SSH into the server (using ssh2 npm package)
+   b. Update apt packages silently
+   c. Install wireguard, ufw
+   d. Enable IP forwarding (net.ipv4.ip_forward=1)
+   e. Generate server keypair
+   f. Write /etc/wireguard/wg0.conf with correct PostUp/PostDown iptables rules
+   g. Enable and start wg-quick@wg0
+   h. Configure UFW: allow 51820/udp, allow SSH, enable
+   i. Generate a client config and save to ~/.spectre/wg/client.conf
+   j. Print success with the server's public IP and WireGuard public key
+   k. Automatically run spectre start --mode wireguard to connect
+
+   Provider hints (shown in spectre deploy --help):
+   - Oracle Cloud Free Tier (recommended, free forever)
+   - Hetzner CAX11 (~€4/month, ARM, 20 Gbps)
+   - DigitalOcean Droplet ($6/month)
+   - Any Ubuntu 22.04 VPS with SSH access
+
+3. MULTI-PEER SUPPORT
+   spectre peer add <name>     Generate a new WireGuard peer config
+   spectre peer list           Show all peers and their last handshake
+   spectre peer remove <name>  Revoke a peer
+   spectre peer qr <name>      Print QR code to terminal (qrcode-terminal)
+
+   Peer configs are added to the server's wg0.conf via SSH automatically.
+   Users can scan the QR code with the official WireGuard mobile app.
+
+4. KILL SWITCH
+   spectre config set kill-switch true
+
+   When enabled, drops all non-tunnel internet traffic if WireGuard
+   disconnects, preventing accidental IP exposure.
+   Linux: iptables rules blocking non-wg0 traffic
+   macOS: pf rules
+
+   New dependencies: wireguard-tools, ssh2, qrcode-terminal
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VERSION 1.0 — STEALTH MODE + POLISH
+(build ONLY after v0.5 is complete and tested)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+New features over v0.5:
+
+1. AMNEZIAWG STEALTH MODE
+   Replace standard WireGuard with AmneziaWG when available on server.
+   AmneziaWG obfuscates packet headers and adds junk traffic to defeat
+   Deep Packet Inspection (DPI) — critical for users in countries with
+   restrictive internet (Bangladesh, India, etc.).
+
+   spectre deploy --stealth    Installs AmneziaWG instead of WireGuard
+   spectre start --stealth     Connects using AmneziaWG protocol
+
+   Stealth parameters to configure (randomised by default for best evasion):
+   Jc (junk packet count), Jmin, Jmax (junk packet size range),
+   S1, S2 (init packet sizes), H1-H4 (packet header values)
+
+   Fallback: if server doesn't have AmneziaWG, fall back to WireGuard
+   with a warning.
+
+2. SERVER HEALTH DASHBOARD
+   spectre status --full
+
+   Shows in a table:
+   - Tunnel mode (AmneziaWG / WireGuard / TLS / SSH)
+   - Connected since + uptime
+   - Current IP + server location (geoip lookup)
+   - Bytes sent / received since connection
+   - Ping latency to server
+   - Kill switch status
+   - DNS mode (DoH / system)
+   - All peers and last handshake times
+
+3. LOCAL REST API
+   spectre server start   Starts a local REST API on 127.0.0.1:7070
+
+   Endpoints:
+   GET  /status     — tunnel state, IP, uptime
+   POST /connect    — start tunnel
+   POST /disconnect — stop tunnel
+   GET  /peers      — list WireGuard peers
+
+   Allows browser extensions, scripts, and other tools to control spectre.
+   Document the API in README.
+
+4. BANDWIDTH MONITOR
+   spectre monitor   Live terminal dashboard showing:
+   - Upload / download speed (bytes/sec) through the tunnel
+   - Total data used this session
+   - Estimated monthly usage at current rate
+   - All peers activity (bytes per peer)
+
+5. FIRST-CLASS WINDOWS SUPPORT
+   Full WireGuard NT driver integration.
+   Detect Windows and use wireguard.exe instead of wg CLI.
+   PowerShell-friendly output for all commands.
+
+6. AUTO-UPDATE
+   spectre update   Check npm for newer version and prompt to install.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GLOBAL RULES — APPLY TO ALL VERSIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CODE QUALITY:
+- ESM throughout (import/export, no require)
+- No TypeScript, no transpilation step
+- Async/await everywhere, no raw callbacks
+- All errors caught and displayed as friendly messages
+- PID files, config files, and keys stored in ~/.spectre/
+- Never log sensitive data (private keys, passwords) to terminal
+
+PRIVACY PRINCIPLES (enforce in code and document in README):
+- Zero telemetry — no analytics, no crash reporting, no phone-home
+- No bundled relay — spectre never operates servers; user owns all infra
+- Private keys never leave ~/.spectre/ and never transmitted anywhere
+- Apache 2.0 licence — all code is auditable
+
+TESTING EACH VERSION:
+After completing each version:
+1. Run spectre --help and verify all commands appear
+2. Run spectre check and verify it prints a table
+3. Run spectre start --server <test-server> and verify IP changes
+4. Run spectre stop and verify tunnel closes
+5. Run npm publish --dry-run and verify it passes clean
+
+PUBLISHING CHECKLIST (do at end of each version):
+- Bump version in package.json
+- Update CHANGELOG.md with what changed
+- Verify --json flag works on all commands
+- Verify README matches actual command output
+- Output: "Ready to publish. Run: npm publish"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+START NOW — BUILD v0.1 COMPLETELY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Build every file in the structure above with complete, working code.
+Do not summarise or describe — write the actual code.
+Run npm install after creating package.json.
+Test that spectre --help works.
+End by telling me exactly what to do to test and publish v0.1.
