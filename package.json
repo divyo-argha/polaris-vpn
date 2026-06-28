@@ -6,6 +6,12 @@
   "bin": {
     "polaris": "src/cli.js"
   },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "engines": {
     "node": ">=18"
   },
