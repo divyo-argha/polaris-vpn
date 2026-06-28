@@ -20,7 +20,6 @@ export const getProxiedIp = async (port) => {
   return data.ip;
 };
 
-// Simple DNS leak check by resolving via system dns
 export const checkDns = async () => {
   try {
     const servers = dns.getServers();
@@ -31,7 +30,6 @@ export const checkDns = async () => {
   }
 };
 
-// Returns IPv6 address if leaked, null otherwise
 export const checkIpv6Leak = async () => {
   try {
     const controller = new AbortController();
@@ -45,6 +43,6 @@ export const checkIpv6Leak = async () => {
     }
     return null;
   } catch (err) {
-    return null; // Timeout or network error typically means IPv6 is disabled/unreachable
+    return null;
   }
 };

@@ -1,12 +1,9 @@
 import chalk from 'chalk';
-import Conf from 'conf';
 import tls from 'tls';
-import { printError, printSuccess, printInfo, createSpinner, printWarning } from '../ui/display.js';
-import { getPublicIp, getProxiedIp } from '../net/ip.js';
-import { spawnSSH, waitForSocks, saveTunnelInfo, getTunnelInfo } from '../tunnel/ssh.js';
-import { startTlsBackground } from '../tunnel/tls.js';
-
-const config = new Conf({ projectName: 'polaris' });
+import { printError, printSuccess, createSpinner } from '../utils/display.js';
+import { getPublicIp, getProxiedIp } from '../net/ip-check.js';
+import { getProfiles } from '../core/profile-service.js';
+import { getActiveTunnel, startTunnel } from '../core/tunnel-service.js';
 
 const detectTlsServer = (host, port = 8443) => {
   return new Promise((resolve) => {
@@ -38,10 +35,9 @@ export default async (options) => {
   const requestedMode = options.mode || 'auto';
 
   if (!server) {
-    const profiles = config.get('servers', {});
-    const activeAlias = config.get('activeServer');
-    if (activeAlias && profiles[activeAlias]) {
-      server = profiles[activeAlias];
+    const { profiles, active } = getProfiles();
+    if (active && profiles[active]) {
+      server = profiles[active];
     } else {
       if (isJson) {
         console.log(JSON.stringify({ error: 'No server specified' }));
@@ -54,7 +50,7 @@ export default async (options) => {
   }
 
   // Check if already running
-  const info = getTunnelInfo();
+  const info = getActiveTunnel();
   if (info) {
     if (isJson) {
       console.log(JSON.stringify({ error: 'Tunnel already running', pid: info.pid }));
@@ -98,19 +94,7 @@ export default async (options) => {
       spinner.start();
     }
 
-    let pid;
-    if (actualMode === 'tls') {
-      pid = startTlsBackground(port, hostPart, 8443);
-    } else {
-      pid = spawnSSH(server, port);
-      saveTunnelInfo(pid, server, port);
-    }
-    
-    if (!isJson) {
-      spinner.text = 'Waiting for proxy to become ready...';
-    }
-    
-    await waitForSocks(port);
+    const res = await startTunnel(server, port, actualMode);
     
     if (!isJson) {
       spinner.text = 'Verifying IP through proxy...';
@@ -128,7 +112,7 @@ export default async (options) => {
       console.log(chalk.dim('\nTunnel is running in the background. Leave this terminal or close it, it will stay alive.'));
       console.log(chalk.dim('Run "polaris status" to check, or "polaris stop" to end.'));
     } else {
-      console.log(JSON.stringify({ success: true, oldIp, newIp, proxy: `socks5://127.0.0.1:${port}`, pid, mode: actualMode }));
+      console.log(JSON.stringify({ success: true, oldIp, newIp, proxy: `socks5://127.0.0.1:${port}`, pid: res.pid, mode: actualMode }));
     }
 
   } catch (err) {

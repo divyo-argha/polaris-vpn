@@ -1,9 +1,9 @@
 import chalk from 'chalk';
-import { printError, printSuccess, printInfo, printWarning } from '../ui/display.js';
-import { startDnsBackground, stopDnsServer, getDnsStatus } from '../net/dns.js';
+import { printError, printSuccess, printInfo, printWarning } from '../utils/display.js';
+import { startDnsResolver, stopDnsResolver, getDnsStatus } from '../core/dns-service.js';
 
 export const dnsStart = async (options) => {
-  const port = parseInt(options.port || '5353', 10);
+  const port = parseInt(options.port || '5354', 10);
   const upstreamMap = {
     'cloudflare': 'https://cloudflare-dns.com/dns-query',
     'google': 'https://dns.google/resolve'
@@ -14,9 +14,9 @@ export const dnsStart = async (options) => {
   const isJson = options.json;
 
   try {
-    const pid = startDnsBackground(port, upstream);
+    const res = startDnsResolver(port, upstream);
     if (isJson) {
-      console.log(JSON.stringify({ success: true, pid, port, upstream }));
+      console.log(JSON.stringify({ success: true, ...res }));
     } else {
       printSuccess(`DNS-over-HTTPS resolver started on 127.0.0.1:${port}`);
       printInfo(`Forwarding to: ${upstream}`);
@@ -33,19 +33,18 @@ export const dnsStart = async (options) => {
 
 export const dnsStop = async (options) => {
   const isJson = options.json;
-  const status = getDnsStatus();
-
-  if (!status) {
-    if (isJson) {
-      console.log(JSON.stringify({ error: 'DNS resolver is not running' }));
-    } else {
-      printWarning('DNS resolver is not running.');
-    }
-    return;
-  }
 
   try {
-    stopDnsServer();
+    const res = stopDnsResolver();
+    if (!res) {
+      if (isJson) {
+        console.log(JSON.stringify({ error: 'DNS resolver is not running' }));
+      } else {
+        printWarning('DNS resolver is not running.');
+      }
+      return;
+    }
+    
     if (isJson) {
       console.log(JSON.stringify({ success: true }));
     } else {

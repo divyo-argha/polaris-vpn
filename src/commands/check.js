@@ -1,12 +1,12 @@
 import chalk from 'chalk';
-import { getTunnelInfo } from '../tunnel/ssh.js';
-import { getPublicIp, getProxiedIp, checkDns, checkIpv6Leak } from '../net/ip.js';
-import { getDnsStatus } from '../net/dns.js';
-import { createTable, createSpinner, printError } from '../ui/display.js';
+import { getActiveTunnel } from '../core/tunnel-service.js';
+import { getDnsStatus } from '../core/dns-service.js';
+import { getPublicIp, getProxiedIp, checkDns, checkIpv6Leak } from '../net/ip-check.js';
+import { createTable, createSpinner, printError } from '../utils/display.js';
 
 export default async (options) => {
   const isJson = options.json;
-  const info = getTunnelInfo();
+  const info = getActiveTunnel();
   const dnsStatus = getDnsStatus();
   
   if (!isJson) {

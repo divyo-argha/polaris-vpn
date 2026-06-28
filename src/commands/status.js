@@ -1,11 +1,11 @@
-import { getTunnelInfo } from '../tunnel/ssh.js';
-import { getProxiedIp, getPublicIp } from '../net/ip.js';
-import { createTable, createSpinner, printError } from '../ui/display.js';
+import { getActiveTunnel } from '../core/tunnel-service.js';
+import { getProxiedIp } from '../net/ip-check.js';
+import { createTable, createSpinner, printError } from '../utils/display.js';
 import chalk from 'chalk';
 
 export default async (options) => {
   const isJson = options.json;
-  const info = getTunnelInfo();
+  const info = getActiveTunnel();
   
   if (!info) {
     if (isJson) {

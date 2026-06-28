@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { printBanner, printError } from './ui/display.js';
+import { printBanner, printError } from './utils/display.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

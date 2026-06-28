@@ -1,21 +1,20 @@
-import { stopTunnel, getTunnelInfo } from '../tunnel/ssh.js';
-import { printSuccess, printInfo, printError } from '../ui/display.js';
+import { stopActiveTunnel } from '../core/tunnel-service.js';
+import { printSuccess, printInfo, printError } from '../utils/display.js';
 
 export default async (options) => {
   const isJson = options.json;
-  const info = getTunnelInfo();
-  
-  if (!info) {
-    if (isJson) {
-      console.log(JSON.stringify({ success: true, message: 'No active tunnel found.' }));
-    } else {
-      printInfo('No active tunnel found.');
-    }
-    return;
-  }
   
   try {
-    stopTunnel();
+    const info = stopActiveTunnel();
+    if (!info) {
+      if (isJson) {
+        console.log(JSON.stringify({ success: true, message: 'No active tunnel found.' }));
+      } else {
+        printInfo('No active tunnel found.');
+      }
+      return;
+    }
+    
     if (isJson) {
       console.log(JSON.stringify({ success: true, message: 'Tunnel stopped successfully.' }));
     } else {
