@@ -30,6 +30,7 @@ export default async (options) => {
         server: info.server,
         port: info.port,
         pid: info.pid,
+        mode: info.mode || 'ssh',
         ip: currentIp,
         uptimeMs
       }));
@@ -41,6 +42,7 @@ export default async (options) => {
       
       table.push(
         ['Status', chalk.green('Connected')],
+        ['Mode', (info.mode || 'ssh').toUpperCase()],
         ['Server', info.server],
         ['Proxy', `socks5://127.0.0.1:${info.port}`],
         ['Current IP', chalk.cyan(currentIp)],

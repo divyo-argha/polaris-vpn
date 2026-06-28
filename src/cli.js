@@ -22,9 +22,10 @@ const willPrintJson = () => process.argv.includes('--json');
 
 program
   .command('start')
-  .description('Start the encrypted SSH tunnel')
-  .option('-s, --server <user@host>', 'SSH server to connect to')
+  .description('Start the encrypted SSH or TLS tunnel')
+  .option('-s, --server <user@host>', 'SSH/TLS server to connect to')
   .option('-p, --port <number>', 'Local SOCKS5 port to bind', '1080')
+  .option('-m, --mode <type>', 'Tunnel mode: ssh, tls or auto', 'auto')
   .action(async (options, cmd) => {
     if (!cmd.optsWithGlobals().json) printBanner();
     try {
@@ -115,6 +116,52 @@ program
     try {
       const { useServer } = await import('./commands/servers.js');
       await useServer(alias, cmd.optsWithGlobals());
+    } catch (err) {
+      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
+      process.exit(1);
+    }
+  });
+
+const dnsCmd = program.command('dns').description('Manage local DNS-over-HTTPS resolver');
+
+dnsCmd
+  .command('start')
+  .description('Start the local DoH resolver')
+  .option('-p, --port <number>', 'Local port to bind', '5354')
+  .option('-u, --upstream <provider>', 'Upstream DoH provider (cloudflare, google, or custom URL)', 'cloudflare')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { dnsStart } = await import('./commands/dns.js');
+      await dnsStart(cmd.optsWithGlobals());
+    } catch (err) {
+      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
+      process.exit(1);
+    }
+  });
+
+dnsCmd
+  .command('stop')
+  .description('Stop the local DoH resolver')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { dnsStop } = await import('./commands/dns.js');
+      await dnsStop(cmd.optsWithGlobals());
+    } catch (err) {
+      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
+      process.exit(1);
+    }
+  });
+
+dnsCmd
+  .command('status')
+  .description('Show local DoH resolver status')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { dnsStatus } = await import('./commands/dns.js');
+      await dnsStatus(cmd.optsWithGlobals());
     } catch (err) {
       if (!cmd.optsWithGlobals().json) printError('Command failed', err);
       process.exit(1);

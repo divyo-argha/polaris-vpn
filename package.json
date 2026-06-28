@@ -4,7 +4,8 @@
   "description": "Your True North in Digital Privacy. A self-hosted VPN CLI.",
   "type": "module",
   "bin": {
-    "polaris": "src/cli.js"
+    "polaris": "src/cli.js",
+    "polaris-server": "src/server/server.js"
   },
   "files": [
     "src",
@@ -35,7 +36,9 @@
     "cli-table3": "^0.6.5",
     "commander": "^15.0.0",
     "conf": "^15.1.0",
+    "dns2": "^3.0.0",
     "node-fetch": "^3.3.2",
+    "node-notifier": "^10.0.1",
     "ora": "^9.4.1",
     "socks-proxy-agent": "^10.1.0"
   }

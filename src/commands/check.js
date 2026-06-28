@@ -1,11 +1,13 @@
 import chalk from 'chalk';
 import { getTunnelInfo } from '../tunnel/ssh.js';
 import { getPublicIp, getProxiedIp, checkDns, checkIpv6Leak } from '../net/ip.js';
+import { getDnsStatus } from '../net/dns.js';
 import { createTable, createSpinner, printError } from '../ui/display.js';
 
 export default async (options) => {
   const isJson = options.json;
   const info = getTunnelInfo();
+  const dnsStatus = getDnsStatus();
   
   if (!isJson) {
     console.log(chalk.cyan.bold('\nRunning Privacy Check...\n'));
@@ -22,7 +24,7 @@ export default async (options) => {
       try {
         const tunnelIp = await getProxiedIp(info.port);
         results.ip = true;
-        details.ip = `Tunnel active: ${tunnelIp}`;
+        details.ip = `Tunnel active (${(info.mode || 'ssh').toUpperCase()}): ${tunnelIp}`;
       } catch (e) {
         results.ip = false;
         details.ip = `Tunnel process running but proxy failed: ${e.message}`;
@@ -40,15 +42,14 @@ export default async (options) => {
       results.dns = false;
       details.dns = 'DNS resolution failed';
     } else {
-      // In a real full VPN this would check if it's our VPN's DNS.
-      // Since this is just a SOCKS5 proxy, system DNS is usually used.
-      // We flag it as warning/fail if it's likely an ISP DNS, but for MVP
-      // we'll just check if we can resolve and list the servers used.
-      const servers = dnsResult.servers.join(', ');
-      // SOCKS5 doesn't automatically tunnel DNS for all OS commands, 
-      // but browsers can be configured to use SOCKS5 for DNS.
-      results.dns = true; 
-      details.dns = `Using system DNS: ${servers}`;
+      if (dnsStatus) {
+        results.dns = true;
+        details.dns = `DoH Resolver Active: 127.0.0.1:${dnsStatus.port} (Upstream: ${dnsStatus.upstream})`;
+      } else {
+        const servers = dnsResult.servers.join(', ');
+        results.dns = false; 
+        details.dns = `Using system/ISP DNS: ${servers} (Potential DNS Leak)`;
+      }
     }
 
     // 3. IPv6 Leak Check
@@ -65,7 +66,12 @@ export default async (options) => {
     if (spinner) spinner.stop();
 
     if (isJson) {
-      console.log(JSON.stringify({ results, details }));
+      console.log(JSON.stringify({
+        results,
+        details,
+        tunnelMode: info ? (info.mode || 'ssh') : 'none',
+        dnsResolver: dnsStatus ? 'doh' : 'system'
+      }));
     } else {
       const table = createTable(['Check', 'Status', 'Details']);
       
@@ -73,9 +79,9 @@ export default async (options) => {
       
       table.push(
         ['IP Address', formatResult(results.ip), details.ip],
-        // If dns is "pass" but we know it's a SOCKS proxy, it's actually a warning that DNS isn't tunneled OS-wide
-        ['DNS Leak', results.dns ? chalk.yellow('⚠ WARN') : formatResult(results.dns), details.dns],
-        ['IPv6 Leak', formatResult(results.ipv6), details.ipv6]
+        ['DNS Leak', dnsStatus ? chalk.green('✓ PASS') : chalk.yellow('⚠ WARN'), details.dns],
+        ['IPv6 Leak', formatResult(results.ipv6), details.ipv6],
+        ['WebRTC Leak', chalk.cyan('ⓘ INFO'), 'WebRTC can bypass proxies. Check browserleaks.com/webrtc']
       );
       
       console.log(table.toString());
@@ -85,7 +91,9 @@ export default async (options) => {
         console.log(chalk.yellow('Note: Your traffic is currently exposed. Run "polaris start" to connect.'));
       } else {
         console.log(chalk.cyan('Note: SOCKS5 proxies only tunnel apps configured to use them (like your browser).'));
-        console.log(chalk.cyan('      System-wide DNS leaks are expected until v0.5 (WireGuard).'));
+        if (!dnsStatus) {
+          console.log(chalk.yellow('      Run "polaris dns start" to prevent DNS queries from leaking to your ISP.'));
+        }
       }
       console.log();
     }
