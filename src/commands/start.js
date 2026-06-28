@@ -113,7 +113,7 @@ export default async (options) => {
       spinner.start();
     }
 
-    const res = await startTunnel(server, port, actualMode);
+    const res = await startTunnel(server, port, actualMode, isJson);
     
     if (actualMode === 'wireguard') {
       if (!isJson) {

@@ -30,11 +30,11 @@ export const getActiveTunnel = () => {
   return info;
 };
 
-export const stopActiveTunnel = () => {
+export const stopActiveTunnel = (isJson = false) => {
   const info = getActiveTunnel();
   if (info) {
     if (info.mode === 'wireguard') {
-      stopWgTunnel(WG_CONF);
+      stopWgTunnel(WG_CONF, isJson);
       disableKillSwitch(info.server);
     } else {
       killPid(info.pid);
@@ -44,7 +44,7 @@ export const stopActiveTunnel = () => {
   return info;
 };
 
-export const startTunnel = async (server, port, mode = 'ssh') => {
+export const startTunnel = async (server, port, mode = 'ssh', isJson = false) => {
   const hostPart = server.includes('@') ? server.split('@')[1] : server;
   ensureDir();
 
@@ -54,7 +54,7 @@ export const startTunnel = async (server, port, mode = 'ssh') => {
       throw new Error(`WireGuard client configuration not found at ${WG_CONF}. Please provision the server first with "polaris deploy".`);
     }
 
-    pid = startWgTunnel(WG_CONF);
+    pid = startWgTunnel(WG_CONF, isJson);
     
     // Save state before enableKillSwitch in case sudo prompt needs to block
     saveDaemonState(TUNNEL_PID_FILE, TUNNEL_CONFIG_FILE, {

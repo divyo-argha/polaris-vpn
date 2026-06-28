@@ -27,22 +27,32 @@ export const generateKeyPair = () => {
   };
 };
 
-export const startWgTunnel = (confPath) => {
-  // Spawn detached so it remains up even if process exits.
-  // Requires sudo/admin.
-  const child = spawn('sudo', ['wg-quick', 'up', confPath], {
-    detached: true,
-    stdio: 'inherit' // inherit so it prompts for sudo password on console if needed
+export const startWgTunnel = (confPath, isJson = false) => {
+  const sudoCheck = spawnSync('sudo', ['-n', 'true']);
+  if (sudoCheck.status !== 0 && isJson) {
+    throw new Error('Sudo privileges required. Please run with "sudo polaris start ..." for JSON mode.');
+  }
+
+  const res = spawnSync('sudo', ['wg-quick', 'up', confPath], {
+    stdio: isJson ? 'ignore' : 'inherit'
   });
   
-  child.unref();
-  return child.pid;
+  if (res.status !== 0) {
+    throw new Error(`wg-quick up failed with code ${res.status}`);
+  }
+  return process.pid;
 };
 
-export const stopWgTunnel = (confPath) => {
+export const stopWgTunnel = (confPath, isJson = false) => {
+  const sudoCheck = spawnSync('sudo', ['-n', 'true']);
+  if (sudoCheck.status !== 0 && isJson) {
+    throw new Error('Sudo privileges required. Please run with "sudo polaris stop" for JSON mode.');
+  }
+
   const res = spawnSync('sudo', ['wg-quick', 'down', confPath], {
-    stdio: 'inherit'
+    stdio: isJson ? 'ignore' : 'inherit'
   });
+  
   if (res.status !== 0) {
     throw new Error(`wg-quick down failed with code ${res.status}`);
   }

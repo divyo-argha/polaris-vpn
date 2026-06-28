@@ -5,7 +5,7 @@ export default async (options) => {
   const isJson = options.json;
   
   try {
-    const info = stopActiveTunnel();
+    const info = stopActiveTunnel(isJson);
     if (!info) {
       if (isJson) {
         console.log(JSON.stringify({ success: true, message: 'No active tunnel found.' }));
