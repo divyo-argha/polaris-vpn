@@ -22,10 +22,10 @@ const willPrintJson = () => process.argv.includes('--json');
 
 program
   .command('start')
-  .description('Start the encrypted SSH or TLS tunnel')
-  .option('-s, --server <user@host>', 'SSH/TLS server to connect to')
+  .description('Start the encrypted SSH, TLS or WireGuard tunnel')
+  .option('-s, --server <user@host>', 'SSH/TLS/WireGuard server to connect to')
   .option('-p, --port <number>', 'Local SOCKS5 port to bind', '1080')
-  .option('-m, --mode <type>', 'Tunnel mode: ssh, tls or auto', 'auto')
+  .option('-m, --mode <type>', 'Tunnel mode: ssh, tls, wireguard or auto', 'auto')
   .action(async (options, cmd) => {
     if (!cmd.optsWithGlobals().json) printBanner();
     try {
@@ -164,6 +164,107 @@ dnsCmd
       await dnsStatus(cmd.optsWithGlobals());
     } catch (err) {
       if (!cmd.optsWithGlobals().json) printError('Command failed', err);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('deploy')
+  .description('Provision a fresh Ubuntu server as a WireGuard server')
+  .requiredOption('-s, --server <user@host>', 'SSH server to configure')
+  .option('-i, --identity <path>', 'SSH private key file path')
+  .option('-p, --password <password>', 'SSH password (alternative to identity)')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const run = (await import('./commands/deploy.js')).default;
+      await run(cmd.optsWithGlobals());
+    } catch (err) {
+      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
+      process.exit(1);
+    }
+  });
+
+const peerCmd = program.command('peer').description('Manage WireGuard client peers');
+
+peerCmd
+  .command('add <name>')
+  .description('Generate and add a new peer config')
+  .action(async (name, options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { peerAdd } = await import('./commands/peer.js');
+      await peerAdd(name, cmd.optsWithGlobals());
+    } catch (err) {
+      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
+      process.exit(1);
+    }
+  });
+
+peerCmd
+  .command('list')
+  .description('List all active peer configurations')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { peerList } = await import('./commands/peer.js');
+      await peerList(cmd.optsWithGlobals());
+    } catch (err) {
+      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
+      process.exit(1);
+    }
+  });
+
+peerCmd
+  .command('remove <name>')
+  .description('Revoke a peer from the server')
+  .action(async (name, options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { peerRemove } = await import('./commands/peer.js');
+      await peerRemove(name, cmd.optsWithGlobals());
+    } catch (err) {
+      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
+      process.exit(1);
+    }
+  });
+
+peerCmd
+  .command('qr <name>')
+  .description('Show peer configuration QR code')
+  .action(async (name, options, cmd) => {
+    try {
+      const { peerQr } = await import('./commands/peer.js');
+      await peerQr(name, cmd.optsWithGlobals());
+    } catch (err) {
+      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
+      process.exit(1);
+    }
+  });
+
+const configCmd = program.command('config').description('Configure polaris settings');
+configCmd
+  .command('set <key> <value>')
+  .description('Set a configuration setting (e.g. kill-switch true)')
+  .action(async (key, value, options, cmd) => {
+    const isJson = cmd.optsWithGlobals().json;
+    if (!isJson) printBanner();
+    try {
+      if (key === 'kill-switch') {
+        const val = value === 'true';
+        const { setKillSwitchConfig } = await import('./utils/kill-switch.js');
+        setKillSwitchConfig(val);
+        const { printSuccess } = await import('./utils/display.js');
+        if (!isJson) {
+          printSuccess(`Set config 'kill-switch' to ${val}`);
+        } else {
+          console.log(JSON.stringify({ success: true, key, value: val }));
+        }
+      } else {
+        throw new Error(`Unknown config key '${key}'`);
+      }
+    } catch (err) {
+      if (!isJson) printError('Command failed', err);
       process.exit(1);
     }
   });
