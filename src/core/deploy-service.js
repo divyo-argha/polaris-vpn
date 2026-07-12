@@ -2,7 +2,7 @@ import { Client } from 'ssh2';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { generateKeyPair } from '../tunnel/wg.js';
+import { generateKeyPair, generateAwgParams } from '../tunnel/wg.js';
 import { ensureDir, CONFIG_DIR } from '../utils/config.js';
 
 const getDefaultPrivateKey = () => {
@@ -37,6 +37,7 @@ export const deployServer = async (serverStr, options = {}) => {
   const parts = serverStr.split('@');
   const username = parts.length > 1 ? parts[0] : 'ubuntu';
   const host = parts.length > 1 ? parts[1] : parts[0];
+  const isAwg = options.mode === 'amneziawg';
   
   const privateKey = options.privateKey 
     ? fs.readFileSync(options.privateKey) 
@@ -49,6 +50,7 @@ export const deployServer = async (serverStr, options = {}) => {
   // 1. Generate local keys
   const serverKeys = generateKeyPair();
   const clientKeys = generateKeyPair();
+  const awgParams = isAwg ? generateAwgParams() : null;
 
   const conn = new Client();
 
@@ -56,10 +58,17 @@ export const deployServer = async (serverStr, options = {}) => {
     conn.on('ready', async () => {
       try {
         const onProgress = options.onProgress || (() => {});
+        const ifaceName = isAwg ? 'awg0' : 'wg0';
+        const configDir = isAwg ? '/etc/amnezia/amneziawg' : '/etc/wireguard';
+        const quickCmd = isAwg ? 'awg-quick' : 'wg-quick';
 
         // Step 1: Install packages
-        onProgress('Installing WireGuard and UFW on remote VPS...');
-        let res = await sshExec(conn, 'sudo apt-get update -y && sudo apt-get install -y wireguard ufw');
+        onProgress(`Installing ${isAwg ? 'AmneziaWG' : 'WireGuard'} and UFW on remote VPS...`);
+        let installCmd = 'sudo apt-get update -y && sudo apt-get install -y wireguard ufw';
+        if (isAwg) {
+          installCmd = 'sudo apt-get update -y && sudo apt-get install -y software-properties-common && sudo add-apt-repository -y ppa:amnezia/ppa && sudo apt-get update -y && sudo apt-get install -y amneziawg-dkms amneziawg-tools ufw';
+        }
+        let res = await sshExec(conn, installCmd);
         if (res.code !== 0) throw new Error(`Installation failed: ${res.stderr}`);
 
         // Step 2: Enable packet forwarding
@@ -73,26 +82,41 @@ export const deployServer = async (serverStr, options = {}) => {
         const ethInterface = res.stdout.trim() || 'eth0';
 
         // Step 4: Write server config
-        onProgress('Configuring WireGuard server wg0...');
+        onProgress(`Configuring server ${ifaceName}...`);
+        
+        let obfuscationBlock = '';
+        if (isAwg) {
+          obfuscationBlock = `Jc = ${awgParams.Jc}
+Jmin = ${awgParams.Jmin}
+Jmax = ${awgParams.Jmax}
+S1 = ${awgParams.S1}
+S2 = ${awgParams.S2}
+H1 = ${awgParams.H1}
+H2 = ${awgParams.H2}
+H3 = ${awgParams.H3}
+H4 = ${awgParams.H4}`;
+        }
+
         const serverConf = `[Interface]
 PrivateKey = ${serverKeys.privateKey}
 Address = 10.0.0.1/24
 ListenPort = 51820
-PostUp = ufw route allow in on wg0; iptables -t nat -A POSTROUTING -o ${ethInterface} -j MASQUERADE
-PostDown = ufw route delete allow in on wg0; iptables -t nat -D POSTROUTING -o ${ethInterface} -j MASQUERADE
+PostUp = ufw route allow in on ${ifaceName}; iptables -t nat -A POSTROUTING -o ${ethInterface} -j MASQUERADE
+PostDown = ufw route delete allow in on ${ifaceName}; iptables -t nat -D POSTROUTING -o ${ethInterface} -j MASQUERADE
+${obfuscationBlock}
 
 [Peer]
 PublicKey = ${clientKeys.publicKey}
 AllowedIPs = 10.0.0.2/32
 `;
 
-        res = await sshExec(conn, `cat << 'EOF' > /tmp/wg0.conf\n${serverConf}\nEOF\nsudo mv /tmp/wg0.conf /etc/wireguard/wg0.conf && sudo chmod 600 /etc/wireguard/wg0.conf`);
+        res = await sshExec(conn, `sudo mkdir -p ${configDir} && cat << 'EOF' > /tmp/${ifaceName}.conf\n${serverConf}\nEOF\nsudo mv /tmp/${ifaceName}.conf ${configDir}/${ifaceName}.conf && sudo chmod 600 ${configDir}/${ifaceName}.conf`);
         if (res.code !== 0) throw new Error(`Server config write failed: ${res.stderr}`);
 
         // Step 5: Start service
-        onProgress('Starting WireGuard interface...');
-        res = await sshExec(conn, 'sudo systemctl stop wg-quick@wg0 || true && sudo systemctl start wg-quick@wg0 && sudo systemctl enable wg-quick@wg0');
-        if (res.code !== 0) throw new Error(`Starting WireGuard failed: ${res.stderr}`);
+        onProgress(`Starting ${ifaceName} interface...`);
+        res = await sshExec(conn, `sudo systemctl stop ${quickCmd}@${ifaceName} || true && sudo systemctl start ${quickCmd}@${ifaceName} && sudo systemctl enable ${quickCmd}@${ifaceName}`);
+        if (res.code !== 0) throw new Error(`Starting tunnel failed: ${res.stderr}`);
 
         // Step 6: Configure UFW firewall
         onProgress('Configuring UFW firewall...');
@@ -105,6 +129,7 @@ AllowedIPs = 10.0.0.2/32
 PrivateKey = ${clientKeys.privateKey}
 Address = 10.0.0.2/24
 DNS = 1.1.1.1
+${obfuscationBlock}
 
 [Peer]
 PublicKey = ${serverKeys.publicKey}
@@ -117,12 +142,13 @@ PersistentKeepalive = 25
         ensureDir(wgDir);
         
         // Save client config
-        const clientConfPath = path.join(wgDir, 'wg0.conf');
+        const clientConfPath = path.join(wgDir, `${ifaceName}.conf`);
         fs.writeFileSync(clientConfPath, clientConf, 'utf-8');
 
         // Also save provisioning info to config
         fs.writeFileSync(path.join(wgDir, 'deploy.json'), JSON.stringify({
           server: serverStr,
+          mode: options.mode || 'wireguard',
           serverPublicKey: serverKeys.publicKey,
           clientPublicKey: clientKeys.publicKey,
           interface: ethInterface,
