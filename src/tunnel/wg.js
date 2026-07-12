@@ -1,5 +1,7 @@
 import { spawnSync, spawn } from 'child_process';
 import crypto from 'crypto';
+import os from 'os';
+import path from 'path';
 
 // Pure JS Curve25519/X25519 key generator matching WireGuard format
 export const generateKeyPair = () => {
@@ -26,9 +28,6 @@ export const generateKeyPair = () => {
     publicKey: pubRaw.toString('base64')
   };
 };
-
-import os from 'os';
-import path from 'path';
 
 export const startWgTunnel = (confPath, isJson = false) => {
   const isWin = os.platform() === 'win32';
