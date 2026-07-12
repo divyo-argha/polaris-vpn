@@ -27,10 +27,27 @@ export const generateKeyPair = () => {
   };
 };
 
+import os from 'os';
+import path from 'path';
+
 export const startWgTunnel = (confPath, isJson = false) => {
-  const sudoCheck = spawnSync('sudo', ['-n', 'true']);
-  if (sudoCheck.status !== 0 && isJson) {
-    throw new Error('Sudo privileges required. Please run with "sudo polaris start ..." for JSON mode.');
+  const isWin = os.platform() === 'win32';
+
+  if (!isWin) {
+    const sudoCheck = spawnSync('sudo', ['-n', 'true']);
+    if (sudoCheck.status !== 0 && isJson) {
+      throw new Error('Sudo privileges required. Please run with "sudo polaris start ..." for JSON mode.');
+    }
+  }
+
+  if (isWin) {
+    const res = spawnSync('wireguard', ['/installtunnelservice', confPath], {
+      stdio: isJson ? 'ignore' : 'inherit'
+    });
+    if (res.status !== 0) {
+      throw new Error(`wireguard /installtunnelservice failed (ensure Admin privileges) with code ${res.status}`);
+    }
+    return process.pid;
   }
 
   const res = spawnSync('sudo', ['wg-quick', 'up', confPath], {
@@ -44,9 +61,24 @@ export const startWgTunnel = (confPath, isJson = false) => {
 };
 
 export const stopWgTunnel = (confPath, isJson = false) => {
-  const sudoCheck = spawnSync('sudo', ['-n', 'true']);
-  if (sudoCheck.status !== 0 && isJson) {
-    throw new Error('Sudo privileges required. Please run with "sudo polaris stop" for JSON mode.');
+  const isWin = os.platform() === 'win32';
+
+  if (!isWin) {
+    const sudoCheck = spawnSync('sudo', ['-n', 'true']);
+    if (sudoCheck.status !== 0 && isJson) {
+      throw new Error('Sudo privileges required. Please run with "sudo polaris stop" for JSON mode.');
+    }
+  }
+
+  if (isWin) {
+    const interfaceName = path.parse(confPath).name;
+    const res = spawnSync('wireguard', ['/uninstalltunnelservice', interfaceName], {
+      stdio: isJson ? 'ignore' : 'inherit'
+    });
+    if (res.status !== 0) {
+      throw new Error(`wireguard /uninstalltunnelservice failed with code ${res.status}`);
+    }
+    return;
   }
 
   const res = spawnSync('sudo', ['wg-quick', 'down', confPath], {

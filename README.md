@@ -4,10 +4,12 @@
 
 Your True North in Digital Privacy. `polaris` is a production-quality, open-source, self-hosted VPN CLI tool. It wraps SSH dynamic port forwarding into a beautiful CLI experience.
 
-## Prerequisites
+### Prerequisites
 
-- SSH access to any VPS (Virtual Private Server).
-- Node.js >= 18
+- Node.js (v18+)
+- SSH access to a remote Linux VPS (Ubuntu/Debian recommended)
+- **Linux/macOS**: `sudo` privileges for configuring WireGuard and network routes locally.
+- **Windows**: The official [WireGuard for Windows](https://www.wireguard.com/install/) client must be installed, and `polaris` must be run from an Administrator prompt.
 
 We highly recommend **Oracle Cloud Free Tier** for your VPS.
 
