@@ -45,13 +45,14 @@ polaris stop
 | --- | --- |
 | `polaris start --server user@host [--port 1080]` | Start the encrypted SSH tunnel. |
 | `polaris stop` | Stop the active tunnel. |
-| `polaris status` | Show current tunnel status, IP, and uptime. |
+| `polaris status [--full]` | Show current tunnel status. `--full` shows GeoIP, ping latency, and WG stats. |
 | `polaris monitor` | Live bandwidth monitor for WireGuard tunnels. |
 | `polaris check` | Run a 3-point privacy check (IP, DNS leak, IPv6 leak). |
 | `polaris add <alias> --server user@host` | Save a server profile for quick access. |
 | `polaris list` | List all saved server profiles. |
 | `polaris use <alias>` | Set a saved profile as the active default. |
 | `polaris server start` | Start a local REST API on `127.0.0.1:7070`. |
+| `polaris update` | Update `polaris-vpn` to the latest version via npm. |
 
 > All commands support the `--json` flag for machine-readable output.
 

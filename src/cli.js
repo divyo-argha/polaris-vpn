@@ -3,11 +3,16 @@ import { Command } from 'commander';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { printBanner, printError } from './utils/display.js';
+import updateNotifier from 'update-notifier';
+import { spawnSync } from 'child_process';
+import { printBanner, printError, printSuccess } from './utils/display.js';
+import chalk from 'chalk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pkg = JSON.parse(readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
+
+updateNotifier({ pkg }).notify();
 
 const program = new Command();
 
@@ -19,6 +24,20 @@ program
 
 // Helper to check if we should print the banner
 const willPrintJson = () => process.argv.includes('--json');
+
+program
+  .command('update')
+  .description('Update polaris-vpn to the latest version')
+  .action(() => {
+    console.log(chalk.cyan('Updating polaris-vpn...'));
+    const res = spawnSync('npm', ['install', '-g', 'polaris-vpn@latest'], { stdio: 'inherit' });
+    if (res.status === 0) {
+      printSuccess('Successfully updated to the latest version!');
+    } else {
+      printError('Failed to update polaris-vpn.');
+      process.exitCode = 1;
+    }
+  });
 
 program
   .command('start')
@@ -54,6 +73,7 @@ program
 program
   .command('status')
   .description('Show current tunnel status, IP, and uptime')
+  .option('--full', 'Show GeoIP, latency, and full data usage stats')
   .action(async (options, cmd) => {
     if (!cmd.optsWithGlobals().json) printBanner();
     try {
