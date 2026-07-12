@@ -29,8 +29,24 @@ export const generateKeyPair = () => {
   };
 };
 
-export const startWgTunnel = (confPath, isJson = false) => {
+export const generateAwgParams = () => {
+  return {
+    Jc: crypto.randomInt(1, 100),
+    Jmin: crypto.randomInt(1, 50),
+    Jmax: crypto.randomInt(50, 1000),
+    S1: crypto.randomInt(15, 150),
+    S2: crypto.randomInt(15, 150),
+    H1: crypto.randomInt(1, 2147483647),
+    H2: crypto.randomInt(1, 2147483647),
+    H3: crypto.randomInt(1, 2147483647),
+    H4: crypto.randomInt(1, 2147483647)
+  };
+};
+
+export const startWgTunnel = (confPath, isJson = false, isAwg = false) => {
   const isWin = os.platform() === 'win32';
+  const quickCmd = isAwg ? 'awg-quick' : 'wg-quick';
+  const serviceCmd = isAwg ? 'amneziawg' : 'wireguard';
 
   if (!isWin) {
     const sudoCheck = spawnSync('sudo', ['-n', 'true']);
@@ -40,27 +56,29 @@ export const startWgTunnel = (confPath, isJson = false) => {
   }
 
   if (isWin) {
-    const res = spawnSync('wireguard', ['/installtunnelservice', confPath], {
+    const res = spawnSync(serviceCmd, ['/installtunnelservice', confPath], {
       stdio: isJson ? 'ignore' : 'inherit'
     });
     if (res.status !== 0) {
-      throw new Error(`wireguard /installtunnelservice failed (ensure Admin privileges) with code ${res.status}`);
+      throw new Error(`${serviceCmd} /installtunnelservice failed (ensure Admin privileges) with code ${res.status}`);
     }
     return process.pid;
   }
 
-  const res = spawnSync('sudo', ['wg-quick', 'up', confPath], {
+  const res = spawnSync('sudo', [quickCmd, 'up', confPath], {
     stdio: isJson ? 'ignore' : 'inherit'
   });
   
   if (res.status !== 0) {
-    throw new Error(`wg-quick up failed with code ${res.status}`);
+    throw new Error(`${quickCmd} up failed with code ${res.status}`);
   }
   return process.pid;
 };
 
-export const stopWgTunnel = (confPath, isJson = false) => {
+export const stopWgTunnel = (confPath, isJson = false, isAwg = false) => {
   const isWin = os.platform() === 'win32';
+  const quickCmd = isAwg ? 'awg-quick' : 'wg-quick';
+  const serviceCmd = isAwg ? 'amneziawg' : 'wireguard';
 
   if (!isWin) {
     const sudoCheck = spawnSync('sudo', ['-n', 'true']);
@@ -71,20 +89,20 @@ export const stopWgTunnel = (confPath, isJson = false) => {
 
   if (isWin) {
     const interfaceName = path.parse(confPath).name;
-    const res = spawnSync('wireguard', ['/uninstalltunnelservice', interfaceName], {
+    const res = spawnSync(serviceCmd, ['/uninstalltunnelservice', interfaceName], {
       stdio: isJson ? 'ignore' : 'inherit'
     });
     if (res.status !== 0) {
-      throw new Error(`wireguard /uninstalltunnelservice failed with code ${res.status}`);
+      throw new Error(`${serviceCmd} /uninstalltunnelservice failed with code ${res.status}`);
     }
     return;
   }
 
-  const res = spawnSync('sudo', ['wg-quick', 'down', confPath], {
+  const res = spawnSync('sudo', [quickCmd, 'down', confPath], {
     stdio: isJson ? 'ignore' : 'inherit'
   });
   
   if (res.status !== 0) {
-    throw new Error(`wg-quick down failed with code ${res.status}`);
+    throw new Error(`${quickCmd} down failed with code ${res.status}`);
   }
 };
