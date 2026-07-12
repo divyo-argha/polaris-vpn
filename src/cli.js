@@ -86,6 +86,19 @@ program
   });
 
 program
+  .command('dashboard')
+  .description('Open the live TUI dashboard')
+  .action(async (options, cmd) => {
+    try {
+      const run = (await import('./commands/dashboard.js')).default;
+      await run(cmd.optsWithGlobals());
+    } catch (err) {
+      printError('Command failed', err);
+      process.exit(1);
+    }
+  });
+
+program
   .command('check')
   .description('Run a 3-point privacy check (IP, DNS leak, IPv6 leak)')
   .action(async (options, cmd) => {
