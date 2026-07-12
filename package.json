@@ -1,6 +1,6 @@
 {
   "name": "polaris-vpn",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Your True North in Digital Privacy. A self-hosted VPN CLI.",
   "type": "module",
   "bin": {
@@ -37,6 +37,7 @@
     "commander": "^15.0.0",
     "conf": "^15.1.0",
     "dns2": "^3.0.0",
+    "express": "^5.2.1",
     "node-fetch": "^3.3.2",
     "node-notifier": "^10.0.1",
     "ora": "^9.4.1",
