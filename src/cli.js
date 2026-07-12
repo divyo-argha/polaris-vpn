@@ -269,6 +269,25 @@ configCmd
     }
   });
 
+program
+  .command('server')
+  .description('Manage the local REST API server')
+  .command('start')
+  .description('Start the local REST API server')
+  .option('-p, --port <port>', 'Port to listen on', '7070')
+  .action(async (options) => {
+    const { serverStart } = await import('./commands/server.js');
+    await serverStart({ ...options, json: willPrintJson() });
+  });
+
+program
+  .command('monitor')
+  .description('Live bandwidth monitor for WireGuard/AmneziaWG tunnels')
+  .action(async (options, cmd) => {
+    const run = (await import('./commands/monitor.js')).default;
+    await run(cmd.optsWithGlobals());
+  });
+
 program.parseAsync(process.argv).catch(err => {
   if (!willPrintJson()) printError('Fatal error', err);
   process.exit(1);
