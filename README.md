@@ -47,6 +47,7 @@ polaris stop
 | --- | --- |
 | `polaris start --server user@host [--port 1080]` | Start the encrypted SSH tunnel. |
 | `polaris stop` | Stop the active tunnel. |
+| `polaris dashboard` | Opens a rich Terminal User Interface (TUI) with real-time stats. |
 | `polaris status [--full]` | Show current tunnel status. `--full` shows GeoIP, ping latency, and WG stats. |
 | `polaris monitor` | Live bandwidth monitor for WireGuard tunnels. |
 | `polaris check` | Run a 3-point privacy check (IP, DNS leak, IPv6 leak). |
@@ -55,6 +56,18 @@ polaris stop
 | `polaris use <alias>` | Set a saved profile as the active default. |
 | `polaris server start` | Start a local REST API on `127.0.0.1:7070`. |
 | `polaris update` | Update `polaris-vpn` to the latest version via npm. |
+
+#### `polaris dashboard`
+Opens a rich Terminal User Interface (TUI) with real-time graphs, server location maps, and live statistics (Rx/Tx, Ping).
+
+#### `polaris status [--full]`
+Displays the connection state, mode, current proxy IP, and active server. Use `--full` to query GeoIP and ping latency.
+
+#### `polaris monitor`
+Live bandwidth monitor that actively graphs the download and upload speeds of your tunnel.
+
+#### `polaris check`
+Checks if your IP matches the proxy, tests for DNS leaks via `ipleak.net`, and verifies IPv6 routing.
 
 > All commands support the `--json` flag for machine-readable output.
 
