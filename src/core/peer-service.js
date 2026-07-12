@@ -65,10 +65,13 @@ const sshExec = (client, command) => {
 export const addPeer = async (name) => {
   const info = getDeployInfo();
   const conn = await sshConnect(info);
+  const isAwg = info.mode === 'amneziawg';
+  const confFile = isAwg ? '/etc/amnezia/amneziawg/awg0.conf' : '/etc/wireguard/wg0.conf';
+  const quickCmd = isAwg ? 'awg-quick@awg0' : 'wg-quick@wg0';
 
   try {
-    // 1. Read remote wg0.conf
-    const catRes = await sshExec(conn, 'sudo cat /etc/wireguard/wg0.conf');
+    // 1. Read remote config
+    const catRes = await sshExec(conn, `sudo cat ${confFile}`);
     if (catRes.code !== 0) throw new Error(`Failed to read server config: ${catRes.stderr}`);
     const configContent = catRes.stdout;
 
@@ -99,18 +102,32 @@ PublicKey = ${peerKeys.publicKey}
 AllowedIPs = ${peerIp}/32
 `;
 
-    const writeCmd = `echo "${peerConfigBlock.replace(/"/g, '\\"')}" | sudo tee -a /etc/wireguard/wg0.conf`;
+    const writeCmd = `echo "${peerConfigBlock.replace(/"/g, '\\"')}" | sudo tee -a ${confFile}`;
     let res = await sshExec(conn, writeCmd);
     if (res.code !== 0) throw new Error(`Failed to append remote peer: ${res.stderr}`);
 
-    // Sync remote wireguard
-    await sshExec(conn, 'sudo systemctl restart wg-quick@wg0');
+    // Sync remote tunnel
+    await sshExec(conn, `sudo systemctl restart ${quickCmd}`);
+
+    let obfuscationBlock = '';
+    if (isAwg && info.awgParams) {
+      obfuscationBlock = `Jc = ${info.awgParams.Jc}
+Jmin = ${info.awgParams.Jmin}
+Jmax = ${info.awgParams.Jmax}
+S1 = ${info.awgParams.S1}
+S2 = ${info.awgParams.S2}
+H1 = ${info.awgParams.H1}
+H2 = ${info.awgParams.H2}
+H3 = ${info.awgParams.H3}
+H4 = ${info.awgParams.H4}`;
+    }
 
     // 3. Save peer config locally
     const clientConf = `[Interface]
 PrivateKey = ${peerKeys.privateKey}
 Address = ${peerIp}/24
 DNS = 1.1.1.1
+${obfuscationBlock}
 
 [Peer]
 PublicKey = ${info.serverPublicKey}
@@ -135,10 +152,13 @@ PersistentKeepalive = 25
 export const listPeers = async () => {
   const info = getDeployInfo();
   const conn = await sshConnect(info);
+  const isAwg = info.mode === 'amneziawg';
+  const confFile = isAwg ? '/etc/amnezia/amneziawg/awg0.conf' : '/etc/wireguard/wg0.conf';
+  const showCmd = isAwg ? 'awg show awg0 dump' : 'wg show wg0 dump';
 
   try {
     // 1. Read remote configuration to parse names
-    const catRes = await sshExec(conn, 'sudo cat /etc/wireguard/wg0.conf');
+    const catRes = await sshExec(conn, `sudo cat ${confFile}`);
     if (catRes.code !== 0) throw new Error('Failed to read remote config');
     const content = catRes.stdout;
 
@@ -158,9 +178,9 @@ export const listPeers = async () => {
       }
     }
 
-    // 2. Fetch wg status
-    const showRes = await sshExec(conn, 'sudo wg show wg0 dump');
-    if (showRes.code !== 0) throw new Error('Failed to run wg show');
+    // 2. Fetch tunnel status
+    const showRes = await sshExec(conn, `sudo ${showCmd}`);
+    if (showRes.code !== 0) throw new Error('Failed to run show command');
     
     const dumpLines = showRes.stdout.trim().split('\n');
     const list = [];
@@ -193,9 +213,12 @@ export const listPeers = async () => {
 export const removePeer = async (name) => {
   const info = getDeployInfo();
   const conn = await sshConnect(info);
+  const isAwg = info.mode === 'amneziawg';
+  const confFile = isAwg ? '/etc/amnezia/amneziawg/awg0.conf' : '/etc/wireguard/wg0.conf';
+  const quickCmd = isAwg ? 'awg-quick@awg0' : 'wg-quick@wg0';
 
   try {
-    const catRes = await sshExec(conn, 'sudo cat /etc/wireguard/wg0.conf');
+    const catRes = await sshExec(conn, `sudo cat ${confFile}`);
     if (catRes.code !== 0) throw new Error('Failed to read remote config');
     const content = catRes.stdout;
 
@@ -209,11 +232,11 @@ export const removePeer = async (name) => {
     const newContent = filteredBlocks.join('[Peer]');
 
     // Save remote config back
-    const writeRes = await sshExec(conn, `cat << 'EOF' > /tmp/wg0.conf\n${newContent}\nEOF\nsudo mv /tmp/wg0.conf /etc/wireguard/wg0.conf && sudo chmod 600 /etc/wireguard/wg0.conf`);
+    const writeRes = await sshExec(conn, `cat << 'EOF' > /tmp/temp.conf\n${newContent}\nEOF\nsudo mv /tmp/temp.conf ${confFile} && sudo chmod 600 ${confFile}`);
     if (writeRes.code !== 0) throw new Error('Failed to update remote config');
 
-    // Sync remote wireguard
-    await sshExec(conn, 'sudo systemctl restart wg-quick@wg0');
+    // Sync remote tunnel
+    await sshExec(conn, `sudo systemctl restart ${quickCmd}`);
 
     // Remove local peer config if it exists
     const peerConfPath = path.join(CONFIG_DIR, 'wg', 'peers', `${name}.conf`);

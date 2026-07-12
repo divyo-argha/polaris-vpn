@@ -152,6 +152,7 @@ PersistentKeepalive = 25
           serverPublicKey: serverKeys.publicKey,
           clientPublicKey: clientKeys.publicKey,
           interface: ethInterface,
+          awgParams: isAwg ? awgParams : null,
           timestamp: new Date().toISOString()
         }, null, 2), 'utf-8');
 

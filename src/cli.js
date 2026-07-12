@@ -219,7 +219,39 @@ program
     }
   });
 
-const peerCmd = program.command('peer').description('Manage WireGuard client peers');
+const ksCmd = program.command('killswitch').description('Manage the system VPN kill switch');
+
+ksCmd
+  .command('on')
+  .description('Enable the kill switch')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { setKillSwitchConfig } = await import('./utils/kill-switch.js');
+      setKillSwitchConfig(true);
+      printSuccess('Kill switch enabled. All non-VPN traffic will be blocked when the tunnel is active.');
+    } catch (err) {
+      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
+      process.exit(1);
+    }
+  });
+
+ksCmd
+  .command('off')
+  .description('Disable the kill switch')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { setKillSwitchConfig } = await import('./utils/kill-switch.js');
+      setKillSwitchConfig(false);
+      printSuccess('Kill switch disabled.');
+    } catch (err) {
+      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
+      process.exit(1);
+    }
+  });
+
+const peerCmd = program.command('peer').description('Manage WireGuard/AmneziaWG client peers');
 
 peerCmd
   .command('add <name>')
