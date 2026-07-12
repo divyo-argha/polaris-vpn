@@ -88,8 +88,21 @@ export default async (options) => {
     const hostPart = server.includes('@') ? server.split('@')[1] : server;
     let actualMode = requestedMode;
 
+    const AWG_CONF = path.join(CONFIG_DIR, 'wg', 'awg0.conf');
+
+    const hasAwgQuick = () => {
+      try {
+        const res = spawnSync('which', ['awg-quick'], { encoding: 'utf-8' });
+        return res.status === 0;
+      } catch (e) {
+        return false;
+      }
+    };
+
     if (requestedMode === 'auto') {
-      if (fs.existsSync(WG_CONF) && hasWgQuick()) {
+      if (fs.existsSync(AWG_CONF) && hasAwgQuick()) {
+        actualMode = 'amneziawg';
+      } else if (fs.existsSync(WG_CONF) && hasWgQuick()) {
         actualMode = 'wireguard';
       } else {
         if (!isJson) {
@@ -115,7 +128,7 @@ export default async (options) => {
 
     const res = await startTunnel(server, port, actualMode, isJson);
     
-    if (actualMode === 'wireguard') {
+    if (actualMode === 'wireguard' || actualMode === 'amneziawg') {
       if (!isJson) {
         spinner.text = 'Waiting for interface to configure...';
       }
@@ -128,12 +141,12 @@ export default async (options) => {
       
       if (!isJson) {
         spinner.stop();
-        printSuccess(`WireGuard full tunnel established successfully to ${server}`);
+        printSuccess(`${actualMode === 'amneziawg' ? 'AmneziaWG (Stealth)' : 'WireGuard'} full tunnel established successfully to ${server}`);
         console.log(`\n  ${chalk.dim('Old IP:')} ${chalk.red(oldIp)}`);
         console.log(`  ${chalk.dim('New IP:')} ${chalk.green(newIp)}`);
         console.log(`  ${chalk.dim('Routing:')} System-wide (All OS traffic)`);
       } else {
-        console.log(JSON.stringify({ success: true, oldIp, newIp, mode: 'wireguard', pid: res.pid }));
+        console.log(JSON.stringify({ success: true, oldIp, newIp, mode: actualMode, pid: res.pid }));
       }
     } else {
       if (!isJson) {

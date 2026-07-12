@@ -41,10 +41,10 @@ program
 
 program
   .command('start')
-  .description('Start the encrypted SSH, TLS or WireGuard tunnel')
+  .description('Start the encrypted SSH, TLS, WireGuard or AmneziaWG tunnel')
   .option('-s, --server <user@host>', 'SSH/TLS/WireGuard server to connect to')
   .option('-p, --port <number>', 'Local SOCKS5 port to bind', '1080')
-  .option('-m, --mode <type>', 'Tunnel mode: ssh, tls, wireguard or auto', 'auto')
+  .option('-m, --mode <type>', 'Tunnel mode: ssh, tls, wireguard, amneziawg or auto', 'auto')
   .action(async (options, cmd) => {
     if (!cmd.optsWithGlobals().json) printBanner();
     try {
@@ -203,10 +203,11 @@ dnsCmd
 
 program
   .command('deploy')
-  .description('Provision a fresh Ubuntu server as a WireGuard server')
+  .description('Provision a remote server with WireGuard or AmneziaWG')
   .requiredOption('-s, --server <user@host>', 'SSH server to configure')
   .option('-i, --identity <path>', 'SSH private key file path')
   .option('-p, --password <password>', 'SSH password (alternative to identity)')
+  .option('-m, --mode <type>', 'Tunnel mode: wireguard or amneziawg', 'wireguard')
   .action(async (options, cmd) => {
     if (!cmd.optsWithGlobals().json) printBanner();
     try {

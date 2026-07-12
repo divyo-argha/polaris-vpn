@@ -9,15 +9,17 @@ import { loadDaemonState, clearDaemonState, killPid, saveDaemonState } from '../
 import { TUNNEL_PID_FILE, TUNNEL_CONFIG_FILE, CONFIG_DIR, ensureDir } from '../utils/config.js';
 
 const WG_CONF = path.join(CONFIG_DIR, 'wg', 'wg0.conf');
+const AWG_CONF = path.join(CONFIG_DIR, 'wg', 'awg0.conf');
 
 export const getActiveTunnel = () => {
   const info = loadDaemonState(TUNNEL_PID_FILE, TUNNEL_CONFIG_FILE);
   if (!info) return null;
 
-  // For WireGuard, PID file tracks start process, but we verify interface status
-  if (info.mode === 'wireguard') {
+  // For WireGuard/AmneziaWG, PID file tracks start process, but we verify interface status
+  if (info.mode === 'wireguard' || info.mode === 'amneziawg') {
+    const showCmd = info.mode === 'amneziawg' ? 'awg' : 'wg';
     try {
-      const showRes = spawnSync('sudo', ['wg', 'show'], { encoding: 'utf-8' });
+      const showRes = spawnSync('sudo', [showCmd, 'show'], { encoding: 'utf-8' });
       if (showRes.status !== 0 || !showRes.stdout.includes('interface:')) {
         clearDaemonState(TUNNEL_PID_FILE, TUNNEL_CONFIG_FILE);
         return null;
@@ -33,8 +35,9 @@ export const getActiveTunnel = () => {
 export const stopActiveTunnel = (isJson = false) => {
   const info = getActiveTunnel();
   if (info) {
-    if (info.mode === 'wireguard') {
-      stopWgTunnel(WG_CONF, isJson);
+    if (info.mode === 'wireguard' || info.mode === 'amneziawg') {
+      const confPath = info.mode === 'amneziawg' ? AWG_CONF : WG_CONF;
+      stopWgTunnel(confPath, isJson, info.mode === 'amneziawg');
       disableKillSwitch(info.server);
     } else {
       killPid(info.pid);
@@ -49,24 +52,26 @@ export const startTunnel = async (server, port, mode = 'ssh', isJson = false) =>
   ensureDir();
 
   let pid;
-  if (mode === 'wireguard') {
-    if (!fs.existsSync(WG_CONF)) {
-      throw new Error(`WireGuard client configuration not found at ${WG_CONF}. Please provision the server first with "polaris deploy".`);
+  if (mode === 'wireguard' || mode === 'amneziawg') {
+    const isAwg = mode === 'amneziawg';
+    const confPath = isAwg ? AWG_CONF : WG_CONF;
+    if (!fs.existsSync(confPath)) {
+      throw new Error(`${isAwg ? 'AmneziaWG' : 'WireGuard'} client configuration not found at ${confPath}. Please provision the server first with "polaris deploy".`);
     }
 
-    pid = startWgTunnel(WG_CONF, isJson);
+    pid = startWgTunnel(confPath, isJson, isAwg);
     
     // Save state before enableKillSwitch in case sudo prompt needs to block
     saveDaemonState(TUNNEL_PID_FILE, TUNNEL_CONFIG_FILE, {
       pid,
       server,
       port: 0,
-      mode: 'wireguard',
+      mode: mode,
       startTime: new Date().toISOString()
     });
 
     enableKillSwitch(server);
-    return { pid, server, port: 0, mode: 'wireguard' };
+    return { pid, server, port: 0, mode: mode };
   } 
   
   if (mode === 'tls') {

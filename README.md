@@ -2,8 +2,7 @@
 
 ![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)
 
-Your True North in Digital Privacy. `polaris` is a production-quality, open-source, self-hosted VPN CLI tool. It wraps SSH dynamic port forwarding into a beautiful CLI experience.
-
+Your True North in Digital Privacy. `polaris` is a production-quality, open-source, self-hosted VPN CLI tool. It supports SSH dynamic port forwarding, WireGuard, and AmneziaWG (Stealth) tunnels.
 ### Prerequisites
 
 - Node.js (v18+)
@@ -45,7 +44,8 @@ polaris stop
 
 | Command | Description |
 | --- | --- |
-| `polaris start --server user@host [--port 1080]` | Start the encrypted SSH tunnel. |
+| `polaris deploy --server user@host --mode amneziawg` | Provision server with AmneziaWG (Stealth Mode) |
+| `polaris start --server user@host [--port 1080] [--mode <type>]` | Start the encrypted tunnel. |
 | `polaris stop` | Stop the active tunnel. |
 | `polaris dashboard` | Opens a rich Terminal User Interface (TUI) with real-time stats. |
 | `polaris status [--full]` | Show current tunnel status. `--full` shows GeoIP, ping latency, and WG stats. |
@@ -103,10 +103,11 @@ One Oracle VM can serve multiple people:
 
 ## Roadmap
 
-- **v0.1**: MVP — SSH SOCKS5 tunnel (Current)
-- **v0.2**: TLS tunnel + DNS-over-HTTPS + leak checker
+- **v0.1**: MVP — SSH SOCKS5 tunnel
 - **v0.5**: WireGuard full tunnel + server provisioning
-- **v1.0**: AmneziaWG stealth mode + multi-peer + QR codes + kill switch
+- **v0.6**: Windows NT Service bindings + Blessed TUI Dashboard
+- **v0.7**: AmneziaWG stealth mode (DPI bypass) (Current)
+- **v1.0**: Multi-peer management + QR codes + Kill switch
 
 ## Contributing
 
