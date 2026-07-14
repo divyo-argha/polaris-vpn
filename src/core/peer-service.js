@@ -126,7 +126,7 @@ H4 = ${info.awgParams.H4}`;
     const clientConf = `[Interface]
 PrivateKey = ${peerKeys.privateKey}
 Address = ${peerIp}/24
-DNS = 1.1.1.1
+DNS = 10.0.0.1
 ${obfuscationBlock}
 
 [Peer]

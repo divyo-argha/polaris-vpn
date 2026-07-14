@@ -63,10 +63,10 @@ export const deployServer = async (serverStr, options = {}) => {
         const quickCmd = isAwg ? 'awg-quick' : 'wg-quick';
 
         // Step 1: Install packages
-        onProgress(`Installing ${isAwg ? 'AmneziaWG' : 'WireGuard'} and UFW on remote VPS...`);
-        let installCmd = 'sudo apt-get update -y && sudo apt-get install -y wireguard ufw';
+        onProgress(`Installing ${isAwg ? 'AmneziaWG' : 'WireGuard'}, UFW, Unbound, and Fail2Ban...`);
+        let installCmd = 'sudo apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard ufw unbound fail2ban';
         if (isAwg) {
-          installCmd = 'sudo apt-get update -y && sudo apt-get install -y software-properties-common && sudo add-apt-repository -y ppa:amnezia/ppa && sudo apt-get update -y && sudo apt-get install -y amneziawg-dkms amneziawg-tools ufw';
+          installCmd = 'sudo apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common && sudo add-apt-repository -y ppa:amnezia/ppa && sudo apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y amneziawg-dkms amneziawg-tools ufw unbound fail2ban';
         }
         let res = await sshExec(conn, installCmd);
         if (res.code !== 0) throw new Error(`Installation failed: ${res.stderr}`);
@@ -118,6 +118,24 @@ AllowedIPs = 10.0.0.2/32
         res = await sshExec(conn, `sudo systemctl stop ${quickCmd}@${ifaceName} || true && sudo systemctl start ${quickCmd}@${ifaceName} && sudo systemctl enable ${quickCmd}@${ifaceName}`);
         if (res.code !== 0) throw new Error(`Starting tunnel failed: ${res.stderr}`);
 
+        // Step 5b: Configure Unbound DNS
+        onProgress('Configuring Unbound Zero-Log DNS...');
+        const unboundConf = `server:
+    interface: 10.0.0.1
+    access-control: 10.0.0.0/24 allow
+    hide-identity: yes
+    hide-version: yes
+    use-caps-for-id: yes
+    prefetch: yes
+`;
+        res = await sshExec(conn, `cat << 'EOF' > /tmp/polaris-dns.conf\n${unboundConf}\nEOF\nsudo mv /tmp/polaris-dns.conf /etc/unbound/unbound.conf.d/polaris-dns.conf && sudo systemctl restart unbound && sudo systemctl enable unbound`);
+        if (res.code !== 0) throw new Error(`Unbound setup failed: ${res.stderr}`);
+
+        // Step 5c: Start Fail2Ban
+        onProgress('Starting Fail2Ban SSH protection...');
+        res = await sshExec(conn, 'sudo systemctl enable fail2ban && sudo systemctl restart fail2ban');
+        if (res.code !== 0) throw new Error(`Fail2ban setup failed: ${res.stderr}`);
+
         // Step 6: Configure UFW firewall
         onProgress('Configuring UFW firewall...');
         res = await sshExec(conn, 'sudo ufw allow 51820/udp && sudo ufw allow 22/tcp && echo "y" | sudo ufw enable');
@@ -128,7 +146,7 @@ AllowedIPs = 10.0.0.2/32
         const clientConf = `[Interface]
 PrivateKey = ${clientKeys.privateKey}
 Address = 10.0.0.2/24
-DNS = 1.1.1.1
+DNS = 10.0.0.1
 ${obfuscationBlock}
 
 [Peer]
