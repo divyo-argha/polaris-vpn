@@ -70,7 +70,6 @@
     "qrcode-terminal": "^0.12.0",
     "socks-proxy-agent": "^10.1.0",
     "ssh2": "^1.17.0",
-    "update-notifier": "^7.3.1",
-    "wireguard-tools": "^0.1.0"
+    "update-notifier": "^7.3.1"
   }
 }

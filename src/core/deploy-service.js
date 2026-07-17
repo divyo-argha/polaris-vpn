@@ -39,9 +39,15 @@ export const deployServer = async (serverStr, options = {}) => {
   const host = parts.length > 1 ? parts[1] : parts[0];
   const isAwg = options.mode === 'amneziawg';
   
-  const privateKey = options.privateKey 
-    ? fs.readFileSync(options.privateKey) 
-    : getDefaultPrivateKey();
+  let privateKey = null;
+  if (options.privateKey) {
+    if (!fs.existsSync(options.privateKey)) {
+      throw new Error(`SSH private key file not found: ${options.privateKey}`);
+    }
+    privateKey = fs.readFileSync(options.privateKey);
+  } else {
+    privateKey = getDefaultPrivateKey();
+  }
 
   if (!privateKey && !options.password) {
     throw new Error('No SSH authentication method found. Please configure default SSH keys or specify key path/password.');
@@ -189,7 +195,8 @@ PersistentKeepalive = 25
       port: options.port || 22,
       username,
       privateKey,
-      password: options.password
+      password: options.password,
+      readyTimeout: 10000 // 10 second timeout for SSH connection
     });
   });
 };

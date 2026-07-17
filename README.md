@@ -2,6 +2,10 @@
 
 ![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)
 
+<div align="center">
+  <img src="./docs/demo.gif" alt="Polaris VPN Terminal Demo" width="800">
+</div>
+
 Your True North in Digital Privacy. `polaris` is a production-quality, open-source, self-hosted VPN CLI tool. It supports SSH dynamic port forwarding, WireGuard, and AmneziaWG (Stealth) tunnels.
 
 ### Prerequisites
