@@ -5,7 +5,7 @@
   "type": "module",
   "bin": {
     "polaris": "src/cli.js",
-    "polaris-server": "src/server/server.js"
+    "polaris-server": "src/commands/server.js"
   },
   "files": [
     "src",
@@ -17,6 +17,15 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Divyo/polaris-vpn.git"
+  },
+  "homepage": "https://github.com/Divyo/polaris-vpn#readme",
+  "bugs": {
+    "url": "https://github.com/Divyo/polaris-vpn/issues"
+  },
+  "author": "Divyo",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/Divyo"
   },
   "engines": {
     "node": ">=18"
@@ -34,7 +43,16 @@
     "cli",
     "wireguard",
     "self-hosted",
-    "oracle-cloud"
+    "oracle-cloud",
+    "free-vpn",
+    "ssh-tunnel",
+    "amneziawg",
+    "stealth-vpn",
+    "dpi-bypass",
+    "zero-trust",
+    "kill-switch",
+    "peer-to-peer",
+    "terminal"
   ],
   "dependencies": {
     "blessed": "^0.1.81",
