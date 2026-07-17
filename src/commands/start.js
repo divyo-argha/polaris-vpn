@@ -3,7 +3,8 @@ import tls from 'tls';
 import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
-import { printError, printSuccess, createSpinner, printInfo } from '../utils/display.js';
+import { printSuccess, createSpinner, printInfo } from '../utils/display.js';
+import { handleError } from '../utils/error-handler.js';
 import { getPublicIp, getProxiedIp } from '../net/ip-check.js';
 import { getProfiles } from '../core/profile-service.js';
 import { getActiveTunnel, startTunnel } from '../core/tunnel-service.js';
@@ -54,12 +55,7 @@ export default async (options) => {
     if (active && profiles[active]) {
       server = profiles[active];
     } else {
-      if (isJson) {
-        console.log(JSON.stringify({ error: 'No server specified' }));
-      } else {
-        printError('No server specified. Use --server <user@host> or set an active profile with "polaris use".');
-      }
-      process.exitCode = 1;
+      handleError('No server specified. Use --server <user@host> or set an active profile with "polaris use".', null, isJson);
       return;
     }
   }
@@ -67,12 +63,7 @@ export default async (options) => {
   // Check if already running
   const info = getActiveTunnel();
   if (info) {
-    if (isJson) {
-      console.log(JSON.stringify({ error: 'Tunnel already running', pid: info.pid }));
-    } else {
-      printError(`Tunnel is already running connected to ${info.server}. Run "polaris stop" first.`);
-    }
-    process.exitCode = 1;
+    handleError(`Tunnel is already running connected to ${info.server}. Run "polaris stop" first.`, null, isJson);
     return;
   }
 
@@ -167,11 +158,6 @@ export default async (options) => {
 
   } catch (err) {
     if (!isJson && spinner) spinner.stop();
-    if (isJson) {
-      console.log(JSON.stringify({ error: err.message }));
-    } else {
-      printError('Failed to start tunnel', err);
-    }
-    process.exitCode = 1;
+    handleError('Failed to start tunnel', err, isJson);
   }
 };

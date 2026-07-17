@@ -1,4 +1,5 @@
-import { printSuccess, printError, printInfo } from '../utils/display.js';
+import { printSuccess, printInfo } from '../utils/display.js';
+import { handleError } from '../utils/error-handler.js';
 import { startApiServer } from '../server/api.js';
 
 export const serverStart = async (options) => {
@@ -25,11 +26,6 @@ Endpoints:
 `);
     }
   } catch (err) {
-    if (isJson) {
-      console.log(JSON.stringify({ error: err.message }));
-    } else {
-      printError('Failed to start local API', err);
-    }
-    process.exitCode = 1;
+    handleError('Failed to start local API', err, isJson);
   }
 };

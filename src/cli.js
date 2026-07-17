@@ -6,6 +6,7 @@ import path from 'path';
 import updateNotifier from 'update-notifier';
 import { spawnSync } from 'child_process';
 import { printBanner, printError, printSuccess } from './utils/display.js';
+import { handleError } from './utils/error-handler.js';
 import chalk from 'chalk';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -51,8 +52,7 @@ program
       const run = (await import('./commands/start.js')).default;
       await run(cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -65,8 +65,7 @@ program
       const run = (await import('./commands/stop.js')).default;
       await run(cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -80,8 +79,7 @@ program
       const run = (await import('./commands/status.js')).default;
       await run(cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -107,8 +105,7 @@ program
       const run = (await import('./commands/check.js')).default;
       await run(cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -122,8 +119,7 @@ program
       const { addServer } = await import('./commands/servers.js');
       await addServer(alias, cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -136,8 +132,7 @@ program
       const { listServers } = await import('./commands/servers.js');
       await listServers(cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -150,8 +145,7 @@ program
       const { useServer } = await import('./commands/servers.js');
       await useServer(alias, cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -168,8 +162,7 @@ dnsCmd
       const { dnsStart } = await import('./commands/dns.js');
       await dnsStart(cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -182,8 +175,7 @@ dnsCmd
       const { dnsStop } = await import('./commands/dns.js');
       await dnsStop(cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -196,8 +188,7 @@ dnsCmd
       const { dnsStatus } = await import('./commands/dns.js');
       await dnsStatus(cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -214,8 +205,7 @@ program
       const run = (await import('./commands/deploy.js')).default;
       await run(cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -231,8 +221,7 @@ ksCmd
       setKillSwitchConfig(true);
       printSuccess('Kill switch enabled. All non-VPN traffic will be blocked when the tunnel is active.');
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -246,8 +235,7 @@ ksCmd
       setKillSwitchConfig(false);
       printSuccess('Kill switch disabled.');
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -262,8 +250,7 @@ peerCmd
       const { peerAdd } = await import('./commands/peer.js');
       await peerAdd(name, cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -276,8 +263,7 @@ peerCmd
       const { peerList } = await import('./commands/peer.js');
       await peerList(cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -290,8 +276,7 @@ peerCmd
       const { peerRemove } = await import('./commands/peer.js');
       await peerRemove(name, cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
@@ -303,8 +288,7 @@ peerCmd
       const { peerQr } = await import('./commands/peer.js');
       await peerQr(name, cmd.optsWithGlobals());
     } catch (err) {
-      if (!cmd.optsWithGlobals().json) printError('Command failed', err);
-      process.exit(1);
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
   });
 
