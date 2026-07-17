@@ -1,6 +1,6 @@
 {
   "name": "polaris-vpn",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Your True North in Digital Privacy. A self-hosted VPN CLI.",
   "type": "module",
   "bin": {
