@@ -111,18 +111,25 @@ export default async () => {
   });
 
   // 4. Peers Table
-  const peersTable = grid.set(6, 7, 6, 5, contrib.table, {
+  const peersTable = grid.set(6, 7, 5, 5, contrib.table, {
     keys: true,
     fg: 'white',
     selectedFg: 'white',
     selectedBg: 'blue',
-    interactive: false,
-    label: ' Active Peers ',
+    interactive: true,
+    label: ' Active Peers (Enter to select) ',
     width: '100%',
     height: '100%',
     border: { type: 'line', fg: 'cyan' },
     columnSpacing: 2,
     columnWidth: [15, 20, 10, 10]
+  });
+
+  // 5. Hotkeys Legend
+  const legendBox = grid.set(11, 7, 1, 5, blessed.box, {
+    content: ' {bold}[↑/↓]{/bold} Select | {bold}[Enter]{/bold} Info | {bold}[k]{/bold} Kill-Switch | {bold}[?]{/bold} Help | {bold}[q]{/bold} Quit',
+    tags: true,
+    style: { fg: 'yellow' }
   });
 
   const rxData = { title: 'RX', x: [], y: [], style: { line: 'green' } };
@@ -148,6 +155,42 @@ export default async () => {
   screen.key(['escape', 'q', 'C-c'], () => {
     return process.exit(0);
   });
+
+  const showModal = (title, text) => {
+    const msg = blessed.message({
+      parent: screen,
+      border: 'line',
+      height: 'shrink',
+      width: 'half',
+      top: 'center',
+      left: 'center',
+      label: ` {bold}${title}{/bold} `,
+      tags: true,
+      keys: true,
+      hidden: false,
+      style: { fg: 'white', bg: 'black', border: { fg: 'cyan' } }
+    });
+    msg.display(text, 0, () => {
+      peersTable.focus();
+      screen.render();
+    });
+  };
+
+  screen.key(['?'], () => {
+    showModal('Help & Shortcuts', ' {bold}[↑/↓]{/bold}   Navigate peers\n {bold}[Enter]{/bold} View selected peer details\n {bold}[k]{/bold}       Toggle network kill-switch\n {bold}[q]{/bold}       Quit dashboard\n\nPress any key to close.');
+  });
+
+  screen.key(['k'], () => {
+    showModal('Kill-Switch', ' {red-fg}Action not yet linked.{/red-fg}\n Will disconnect all non-VPN traffic.\n\nPress any key to close.');
+  });
+
+  peersTable.rows.on('select', (item, index) => {
+    const peerName = item.content.split(' ')[0] || 'Unknown';
+    showModal('Peer Action', ` {bold}Peer:{/bold} ${peerName}\n\n Viewing and disconnecting specific peers directly\n from the TUI will be available in v1.1.\n\nPress any key to close.`);
+  });
+
+  // Focus table by default to allow interaction
+  peersTable.focus();
 
   const updateDashboard = async () => {
     // 1. Fetch IP & GeoIP (runs once)

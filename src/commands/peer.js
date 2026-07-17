@@ -1,8 +1,9 @@
 import fs from 'fs';
 import chalk from 'chalk';
 import qrcode from 'qrcode-terminal';
-import { printSuccess, printError, createSpinner, printInfo, createTable } from '../utils/display.js';
+import { createSpinner, printBox, printInfo, createTable } from '../utils/display.js';
 import { addPeer, listPeers, removePeer, getLocalPeerConfPath } from '../core/peer-service.js';
+import { handleError } from '../utils/error-handler.js';
 
 export const peerAdd = async (name, options) => {
   const isJson = options.json;
@@ -15,22 +16,15 @@ export const peerAdd = async (name, options) => {
     if (isJson) {
       console.log(JSON.stringify({ success: true, ...res }));
     } else {
-      printSuccess(`Saved local peer profile: ${res.confPath}`);
-      printInfo(`IP Assigned: ${res.ip}`);
-      printInfo(`Public Key : ${res.publicKey}`);
-      console.log(chalk.cyan('\nScan this QR code with the WireGuard app on your mobile device:\n'));
+      printBox(`Peer Created: ${name} 🎉`, `Local Profile: ${res.confPath}\nIP Assigned: ${res.ip}\nPublic Key: ${res.publicKey}`, 'success');
+      console.log(chalk.cyan('Scan this QR code with the WireGuard app on your mobile device:\n'));
       
       const confString = fs.readFileSync(res.confPath, 'utf-8');
       qrcode.generate(confString, { small: true });
     }
   } catch (err) {
     if (spinner) spinner.fail('Failed to add peer');
-    if (isJson) {
-      console.log(JSON.stringify({ error: err.message }));
-    } else {
-      printError('Failed to add peer', err);
-    }
-    process.exitCode = 1;
+    handleError('Failed to add peer', err, isJson);
   }
 };
 
@@ -66,12 +60,7 @@ export const peerList = async (options) => {
     console.log('\n' + table.toString() + '\n');
   } catch (err) {
     if (spinner) spinner.stop();
-    if (isJson) {
-      console.log(JSON.stringify({ error: err.message }));
-    } else {
-      printError('Failed to list peers', err);
-    }
-    process.exitCode = 1;
+    handleError('Failed to list peers', err, isJson);
   }
 };
 
@@ -88,12 +77,7 @@ export const peerRemove = async (name, options) => {
     }
   } catch (err) {
     if (spinner) spinner.fail('Failed to remove peer');
-    if (isJson) {
-      console.log(JSON.stringify({ error: err.message }));
-    } else {
-      printError('Failed to remove peer', err);
-    }
-    process.exitCode = 1;
+    handleError('Failed to remove peer', err, isJson);
   }
 };
 
@@ -111,11 +95,6 @@ export const peerQr = async (name, options) => {
       qrcode.generate(confString, { small: true });
     }
   } catch (err) {
-    if (isJson) {
-      console.log(JSON.stringify({ error: err.message }));
-    } else {
-      printError('Failed to retrieve QR code', err);
-    }
-    process.exitCode = 1;
+    handleError('Failed to retrieve QR code', err, isJson);
   }
 };

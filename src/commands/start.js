@@ -3,7 +3,7 @@ import tls from 'tls';
 import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
-import { printSuccess, createSpinner, printInfo } from '../utils/display.js';
+import { printSuccess, createSpinner, printInfo, promptSelection, printBox } from '../utils/display.js';
 import { handleError } from '../utils/error-handler.js';
 import { getPublicIp, getProxiedIp } from '../net/ip-check.js';
 import { getProfiles } from '../core/profile-service.js';
@@ -51,12 +51,30 @@ export default async (options) => {
   const requestedMode = options.mode || 'auto';
 
   if (!server) {
-    const { profiles, active } = getProfiles();
+    const active = config.get('activeProfile');
+    const profiles = config.get('profiles') || {};
+    
     if (active && profiles[active]) {
       server = profiles[active];
     } else {
-      handleError('No server specified. Use --server <user@host> or set an active profile with "polaris use".', null, isJson);
-      return;
+      if (isJson) {
+        handleError('No server specified.', null, isJson);
+        return;
+      }
+      
+      const profileNames = Object.keys(profiles);
+      if (profileNames.length === 0) {
+        handleError('No server specified and no saved profiles found. Use --server <user@host>', null, isJson);
+        return;
+      }
+
+      printInfo('No server specified. Select a saved profile to connect to:');
+      const choice = await promptSelection('Select Profile:', profileNames.map(p => ({
+        name: `${p} (${profiles[p]})`,
+        value: profiles[p]
+      })));
+      
+      server = choice;
     }
   }
 
@@ -132,10 +150,7 @@ export default async (options) => {
       
       if (!isJson) {
         spinner.stop();
-        printSuccess(`${actualMode === 'amneziawg' ? 'AmneziaWG (Stealth)' : 'WireGuard'} full tunnel established successfully to ${server}`);
-        console.log(`\n  ${chalk.dim('Old IP:')} ${chalk.red(oldIp)}`);
-        console.log(`  ${chalk.dim('New IP:')} ${chalk.green(newIp)}`);
-        console.log(`  ${chalk.dim('Routing:')} System-wide (All OS traffic)`);
+        printBox('Tunnel Connected 🚀', `Server: ${server}\nMode: ${actualMode.toUpperCase()}\nStatus: System-wide (All OS traffic)\nOld IP: ${oldIp}\nNew IP: ${newIp}`, 'success');
       } else {
         console.log(JSON.stringify({ success: true, oldIp, newIp, mode: actualMode, pid: res.pid }));
       }
@@ -147,10 +162,7 @@ export default async (options) => {
       
       if (!isJson) {
         spinner.stop();
-        printSuccess(`Tunnel established successfully to ${server} (${actualMode.toUpperCase()} mode)`);
-        console.log(`\n  ${chalk.dim('Old IP:')} ${chalk.red(oldIp)}`);
-        console.log(`  ${chalk.dim('New IP:')} ${chalk.green(newIp)}`);
-        console.log(`  ${chalk.dim('Proxy :')} ${chalk.cyan(`socks5://127.0.0.1:${port}`)}`);
+        printBox('Tunnel Connected 🚀', `Server: ${server}\nMode: ${actualMode.toUpperCase()}\nProxy: socks5://127.0.0.1:${port}\nOld IP: ${oldIp}\nNew IP: ${newIp}`, 'success');
       } else {
         console.log(JSON.stringify({ success: true, oldIp, newIp, proxy: `socks5://127.0.0.1:${port}`, pid: res.pid, mode: actualMode }));
       }

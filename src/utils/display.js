@@ -1,10 +1,14 @@
 import chalk from 'chalk';
 import ora from 'ora';
 import Table from 'cli-table3';
+import boxen from 'boxen';
+import gradient from 'gradient-string';
+import { select } from '@inquirer/prompts';
 
 export const printBanner = () => {
-  console.log(chalk.cyan.bold('\npolaris — Leave no trace.'));
-  console.log(chalk.dim('Your True North in Digital Privacy.\n'));
+  const logo = `\n  polaris — Leave no trace.  `;
+  console.log(gradient.pastel.multiline(logo));
+  console.log(chalk.dim('  Your True North in Digital Privacy.\n'));
 };
 
 export const createSpinner = (text) => {
@@ -36,5 +40,28 @@ export const createTable = (head = []) => {
   return new Table({
     head: head.map(h => chalk.cyan(h)),
     style: { head: [], border: [] }
+  });
+};
+
+export const printBox = (title, content, type = 'info') => {
+  const colors = {
+    info: 'cyan',
+    success: 'green',
+    warning: 'yellow',
+    error: 'red'
+  };
+  console.log(boxen(content, {
+    title: chalk[colors[type] || 'cyan'](title),
+    padding: 1,
+    margin: 1,
+    borderStyle: 'round',
+    borderColor: colors[type] || 'cyan'
+  }));
+};
+
+export const promptSelection = async (message, choices) => {
+  return select({
+    message,
+    choices
   });
 };

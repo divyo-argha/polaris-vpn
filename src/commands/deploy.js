@@ -1,19 +1,15 @@
 import chalk from 'chalk';
-import { printSuccess, printError, createSpinner, printInfo } from '../utils/display.js';
+import { createSpinner, printBox } from '../utils/display.js';
 import { deployServer } from '../core/deploy-service.js';
 import startCommand from './start.js';
+import { handleError } from '../utils/error-handler.js';
 
 export default async (options) => {
   const isJson = options.json;
   const server = options.server;
   
   if (!server) {
-    if (isJson) {
-      console.log(JSON.stringify({ error: 'Missing --server argument' }));
-    } else {
-      printError('You must specify a server with --server <user@host>');
-    }
-    process.exitCode = 1;
+    handleError('You must specify a server with --server <user@host>', null, isJson);
     return;
   }
 
@@ -35,10 +31,7 @@ export default async (options) => {
     if (isJson) {
       console.log(JSON.stringify({ success: true, ...res }));
     } else {
-      printSuccess(`WireGuard configured on remote VPS ${server}`);
-      printInfo(`Local Client Config: ${res.clientConfPath}`);
-      printInfo(`Client Public Key  : ${res.clientPublicKey}`);
-      printInfo(`Server Public Key  : ${res.serverPublicKey}`);
+      printBox('Server Provisioned Successfully 🚀', `Remote Server: ${server}\nLocal Config: ${res.clientConfPath}\nClient PK: ${res.clientPublicKey}\nServer PK: ${res.serverPublicKey}`, 'success');
       console.log(chalk.cyan('\nStarting WireGuard tunnel connection locally...\n'));
     }
 
@@ -47,11 +40,6 @@ export default async (options) => {
 
   } catch (err) {
     if (spinner) spinner.fail('Deployment failed');
-    if (isJson) {
-      console.log(JSON.stringify({ error: err.message }));
-    } else {
-      printError('Deployment failed', err);
-    }
-    process.exitCode = 1;
+    handleError('Deployment failed', err, isJson);
   }
 };
