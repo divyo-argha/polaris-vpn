@@ -338,7 +338,14 @@ program
     await run(cmd.optsWithGlobals());
   });
 
-program.parseAsync(process.argv).catch(err => {
-  if (!willPrintJson()) printError('Fatal error', err);
-  process.exit(1);
-});
+if (process.argv.length === 2) {
+  import('./commands/tui.js').then(m => m.default()).catch(err => {
+    printError('Fatal error', err);
+    process.exit(1);
+  });
+} else {
+  program.parseAsync(process.argv).catch(err => {
+    if (!willPrintJson()) printError('Fatal error', err);
+    process.exit(1);
+  });
+}
