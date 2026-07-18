@@ -1,5 +1,4 @@
 import blessed from 'blessed';
-import contrib from 'blessed-contrib';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -7,81 +6,88 @@ import { spawnSync } from 'child_process';
 import os from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const pkg = JSON.parse(readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
+const __dirname  = path.dirname(__filename);
+const pkg        = JSON.parse(readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
 
-// ─────────────────────────────────────────────────────────────────────
-//  DESIGN SYSTEM
-// ─────────────────────────────────────────────────────────────────────
+// ─── DESIGN SYSTEM ────────────────────────────────────────────────────────────
 const D = {
-  accent:      '#00d7ff',
-  accentDim:   '#005f87',
-  accentFaint: '#003f5f',
-  success:     '#00ff87',
-  danger:      '#ff5f5f',
-  warning:     '#ffaf00',
-  purple:      '#af87ff',
-  dim:         '#4e4e4e',
-  muted:       '#767676',
-  text:        '#d0d0d0',
-  textBright:  '#ffffff',
+  accent:     '#88c0d0',  // Nord Frost Blue
+  accentDim:  '#81a1c1',  // Nord Steel Blue
+  success:    '#a3be8c',  // Nord Green
+  danger:     '#bf616a',  // Nord Red
+  warning:    '#ebcb8b',  // Nord Yellow
+  purple:     '#b48ead',  // Nord Purple
+  muted:      '#d8dee9',  // Nord Snow Dim
+  text:       '#e5e9f0',  // Nord Snow
+  bright:     '#eceff4',  // Nord Snow Bright
+  bg:         '#2e3440',  // Nord Dark
+  bgSidebar:  '#3b4252',  // Nord Dark (sidebar)
+  bgSel:      '#4c566a',  // Nord Dark (selected)
+  sep:        '#434c5e',  // Nord Dark (divider)
 };
 
-const tag = (color, text) => `{${color}-fg}${text}{/}`;
-const bold = (text) => `{bold}${text}{/bold}`;
-const dim  = (text) => tag(D.muted, text);
+// Tagged template helpers for blessed markup
+const t  = (hex, s) => `{${hex}-fg}${s}{/}`;
+const b  = (s)      => `{bold}${s}{/bold}`;
+const mu = (s)      => t(D.muted, s);
+const hr = (n = 48) => t(D.sep, '─'.repeat(n));
 
-// ─────────────────────────────────────────────────────────────────────
-//  ASCII LOGO
-// ─────────────────────────────────────────────────────────────────────
-const LOGO_LINES = [
-  `{#00d7ff-fg}{bold}  ██████╗  ██████╗ ██╗      █████╗ ██████╗ ██╗███████╗{/bold}{/}`,
-  `{#00d7ff-fg}{bold}  ██╔══██╗██╔═══██╗██║     ██╔══██╗██╔══██╗██║██╔════╝{/bold}{/}`,
-  `{#00afff-fg}{bold}  ██████╔╝██║   ██║██║     ███████║██████╔╝██║███████╗{/bold}{/}`,
-  `{#0087d7-fg}{bold}  ██╔═══╝ ██║   ██║██║     ██╔══██║██╔══██╗██║╚════██║{/bold}{/}`,
-  `{#005faf-fg}{bold}  ██║     ╚██████╔╝███████╗██║  ██║██║  ██║██║███████║{/bold}{/}`,
-  `{#005faf-fg}{bold}  ╚═╝      ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚══════╝{/bold}{/}`,
-];
+// Mode badge
+const badge = (mode) => {
+  if (!mode) return mu('—');
+  const c = { wireguard: D.success, amneziawg: D.purple, tls: D.warning, ssh: D.accent };
+  return t(c[mode.toLowerCase()] || D.accent, mode.toUpperCase());
+};
 
-// ─────────────────────────────────────────────────────────────────────
-//  NAVIGATION MENU STRUCTURE
-// ─────────────────────────────────────────────────────────────────────
+// ─── LOGO ─────────────────────────────────────────────────────────────────────
+const LOGO = [
+  `{#88c0d0-fg}{bold}  ██████╗  ██████╗ ██╗      █████╗ ██████╗ ██╗███████╗{/bold}{/}`,
+  `{#88c0d0-fg}{bold}  ██╔══██╗██╔═══██╗██║     ██╔══██╗██╔══██╗██║██╔════╝{/bold}{/}`,
+  `{#8fbcbb-fg}{bold}  ██████╔╝██║   ██║██║     ███████║██████╔╝██║███████╗{/bold}{/}`,
+  `{#81a1c1-fg}{bold}  ██╔═══╝ ██║   ██║██║     ██╔══██║██╔══██╗██║╚════██║{/bold}{/}`,
+  `{#5e81ac-fg}{bold}  ██║     ╚██████╔╝███████╗██║  ██║██║  ██║██║███████║{/bold}{/}`,
+  `{#5e81ac-fg}{bold}  ╚═╝      ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚══════╝{/bold}{/}`,
+].join('\n');
+
+// ─── NAVIGATION STRUCTURE ─────────────────────────────────────────────────────
+// null entries render as visual separators
 const VIEWS = [
-  { id: 'home',      label: 'Home',          icon: '◈', group: 'main'  },
-  { id: 'servers',   label: 'Servers',       icon: '⚙', group: 'main'  },
-  { id: 'connect',   label: 'Quick Connect', icon: '▶', group: 'main'  },
-  { id: 'dashboard', label: 'Live Monitor',  icon: '◉', group: 'main'  },
+  { id: 'home',       label: 'Home',          icon: '◈' },
+  { id: 'servers',    label: 'Servers',        icon: '⚙' },
+  { id: 'connect',    label: 'Quick Connect',  icon: '▶' },
+  { id: 'dashboard',  label: 'Live Monitor',   icon: '◉' },
   null,
-  { id: 'peers',     label: 'Peers',         icon: '≡', group: 'tools' },
-  { id: 'check',     label: 'Privacy Check', icon: '✦', group: 'tools' },
-  { id: 'deploy',    label: 'Deploy VPS',    icon: '⊕', group: 'tools' },
+  { id: 'peers',      label: 'Peers',          icon: '≡' },
+  { id: 'check',      label: 'Privacy Check',  icon: '✦' },
+  { id: 'deploy',     label: 'Deploy VPS',     icon: '⊕' },
   null,
-  { id: 'disconnect',label: 'Disconnect',    icon: '■', group: 'ctrl', danger: true },
-  { id: 'quit',      label: 'Quit',          icon: '✕', group: 'ctrl', danger: true },
+  { id: 'disconnect', label: 'Disconnect',     icon: '■', danger: true },
+  { id: 'quit',       label: 'Quit',           icon: '✕', danger: true },
 ];
 
-// ─────────────────────────────────────────────────────────────────────
-//  HELPERS
-// ─────────────────────────────────────────────────────────────────────
+// Flat list of navigable indices (no separators)
+const NAV = VIEWS.reduce((acc, v, i) => { if (v) acc.push(i); return acc; }, []);
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
 const pingServer = (ip) => {
   if (!ip) return '—';
-  const isWin = os.platform() === 'win32';
-  const res = spawnSync('ping', isWin ? ['-n','1','-w','1000',ip] : ['-c','1','-W','1',ip], { encoding:'utf-8' });
-  if (res.status === 0) {
-    const m = res.stdout.match(isWin ? /Average = (\d+)ms/ : /time=([\d.]+)\s*ms/);
+  const win = os.platform() === 'win32';
+  const r = spawnSync('ping', win ? ['-n','1','-w','500',ip] : ['-c','1','-W','1',ip], { encoding: 'utf-8' });
+  if (r.status === 0) {
+    const m = r.stdout.match(win ? /Average = (\d+)ms/ : /time=([\d.]+)\s*ms/);
     if (m) return `${m[1]} ms`;
   }
   return 'Timeout';
 };
 
-const formatBytes = (b) => {
-  if (!b || b === 0) return '0 B';
-  const k = 1024, s = ['B','KB','MB','GB','TB'];
-  const i = Math.floor(Math.log(b) / Math.log(k));
-  return `${parseFloat((b / Math.pow(k, i)).toFixed(1))} ${s[i]}`;
+const fmtBytes = (n) => {
+  if (!n || n === 0) return '0 B';
+  const k = 1024, s = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(n) / Math.log(k));
+  return `${(n / Math.pow(k, i)).toFixed(1)} ${s[i]}`;
 };
 
-const getWgStats = () => {
+const wgStats = () => {
   const r = spawnSync('sudo', ['wg', 'show', 'all', 'dump'], { encoding: 'utf-8' });
   if (r.status !== 0) return null;
   const lines = r.stdout.trim().split('\n');
@@ -95,510 +101,372 @@ const getWgStats = () => {
   return { rx, tx };
 };
 
-const modeColor = (mode) => {
-  if (!mode) return D.muted;
-  switch (mode.toLowerCase()) {
-    case 'wireguard':  return D.success;
-    case 'amneziawg': return D.purple;
-    case 'tls':        return D.warning;
-    default:           return D.accent;
-  }
-};
-
-const modeBadge = (mode) => {
-  if (!mode) return dim('unknown');
-  return tag(modeColor(mode), mode.toUpperCase());
-};
-
-const hr = (w = 44) => dim('─'.repeat(w));
-
-// ─────────────────────────────────────────────────────────────────────
-//  MAIN TUI
-// ─────────────────────────────────────────────────────────────────────
+// ─── MAIN TUI ────────────────────────────────────────────────────────────────
 export default async () => {
   const { getActiveTunnel } = await import('../core/tunnel-service.js');
   const { getProfiles }     = await import('../core/profile-service.js');
 
+  // ─── APP STATE ────────────────────────────────────────────────────
+  let menuIdx     = 0;   // index into NAV array (sidebar highlight)
+  let currentView = 'home';
+  let srvIdx      = 0;   // selected server in Servers view
+
+  // ─── SCREEN ───────────────────────────────────────────────────────
   const screen = blessed.screen({
     smartCSR:    true,
     title:       `Polaris VPN  v${pkg.version}`,
     fullUnicode: true,
-    dockBorders: true,
-    forceUnicode: true,
+    dockBorders: false,
+    ignoreLocked: ['C-c'],
   });
 
-  // ── TOP HEADER ────────────────────────────────────────────────────
-  const headerBox = blessed.box({
+  // ─── WIDGETS ──────────────────────────────────────────────────────
+  const SIDEBAR_W = 26;
+  const HEADER_H  = 8;
+  const FOOTER_H  = 3;
+
+  // Header bar
+  const wHeader = blessed.box({
     parent: screen,
-    top: 0, left: 0,
-    width: '100%', height: 8,
-    tags: true,
-    content: LOGO_LINES.join('\n'),
-    style: { bg: 'black' },
+    top: 0, left: 0, width: '100%', height: HEADER_H,
+    tags: true, content: LOGO,
+    style: { bg: D.bg },
   });
 
-  // Version + subtitle in header (right-aligned)
-  const headerMeta = blessed.box({
+  // Version tag (top-right)
+  const wVersion = blessed.box({
     parent: screen,
-    top: 0, right: 1,
-    width: 42, height: 8,
+    top: 1, right: 2, width: 26, height: 5,
     tags: true,
     content: [
       '',
-      '',
-      `${dim('version')} ${tag(D.accent, pkg.version)}`,
-      `${dim('Leave no trace.')}`,
-      `${dim('─────────────────────────────────')}`,
-      '',
-      '',
-      '',
+      `${mu('version ')}${t(D.accent, pkg.version)}`,
+      mu('Leave no trace.'),
+      mu('─────────────────────'),
     ].join('\n'),
-    style: { bg: 'black' },
-    align: 'right',
+    style: { bg: D.bg }, align: 'right',
   });
 
-  // Separator line under header
-  blessed.line({
+  // Thin separator line under header
+  blessed.box({
     parent: screen,
-    top: 8, left: 0,
-    orientation: 'horizontal',
-    width: '100%',
-    style: { fg: D.accentDim },
+    top: HEADER_H, left: 0, width: '100%', height: 1,
+    style: { bg: D.accentDim },
   });
 
-  // ── LEFT SIDEBAR ──────────────────────────────────────────────────
-  const SIDEBAR_W = 24;
-
-  const sidebarBorder = blessed.box({
+  // Sidebar outer border
+  const wSidebarBorder = blessed.box({
     parent: screen,
-    top: 9, left: 0,
-    width: SIDEBAR_W, bottom: 3,
-    tags: true,
+    top: HEADER_H + 1, left: 0, width: SIDEBAR_W, bottom: FOOTER_H,
     border: { type: 'line' },
-    style: { border: { fg: D.accentDim }, bg: 'black' },
+    style: { border: { fg: D.accent }, bg: D.bgSidebar },
   });
 
-  // Status pill inside sidebar
-  const sidebarStatus = blessed.box({
+  // Status pill (top of sidebar)
+  const wStatus = blessed.box({
     parent: screen,
-    top: 10, left: 2,
-    width: SIDEBAR_W - 4, height: 3,
-    tags: true,
-    content: '',
-    style: { bg: 'black' },
+    top: HEADER_H + 2, left: 1, width: SIDEBAR_W - 2, height: 3,
+    tags: true, content: '',
+    style: { bg: D.bgSidebar },
   });
 
-  // Thin separator inside sidebar
-  blessed.line({
+  // Sidebar divider
+  blessed.box({
     parent: screen,
-    top: 13, left: 1,
-    orientation: 'horizontal',
-    width: SIDEBAR_W - 2,
-    style: { fg: D.dim },
+    top: HEADER_H + 5, left: 1, width: SIDEBAR_W - 2, height: 1,
+    style: { bg: D.sep },
   });
 
-  // The navigable list (below status pill)
-  const navList = blessed.list({
+  // Sidebar nav (plain box — no blessed.list focus fights)
+  const wNav = blessed.box({
     parent: screen,
-    top: 14, left: 1,
-    width: SIDEBAR_W - 2, bottom: 4,
-    tags: true,
-    keys: true,
-    vi: true,
+    top: HEADER_H + 6, left: 1, width: SIDEBAR_W - 2, bottom: FOOTER_H + 4,
+    tags: true, content: '',
+    style: { bg: D.bgSidebar },
     mouse: true,
-    scrollable: false,
-    items: [],
-    style: {
-      bg: 'black',
-      fg: D.text,
-      selected: { bg: D.accentDim, fg: D.textBright, bold: true },
-      item: { fg: D.text },
-    },
   });
 
-  // Sidebar footer hint
-  const sidebarHint = blessed.box({
+  // Sidebar bottom hint
+  const wHint = blessed.box({
     parent: screen,
-    bottom: 3, left: 1,
-    width: SIDEBAR_W - 2, height: 3,
-    tags: true,
-    content: '',
-    style: { bg: 'black', fg: D.muted },
+    bottom: FOOTER_H, left: 0, width: SIDEBAR_W, height: 4,
+    tags: true, content: '',
     border: { type: 'line' },
-    style: { border: { fg: D.dim }, bg: 'black', fg: D.muted },
-  });
-
-  // ── RIGHT MAIN PANEL ─────────────────────────────────────────────
-  const mainPanel = blessed.box({
-    parent: screen,
-    top: 9, left: SIDEBAR_W,
-    right: 0, bottom: 3,
-    tags: true,
-    scrollable: true,
-    alwaysScroll: true,
-    keys: true,
-    mouse: true,
-    style: {
-      bg: 'black',
-      fg: D.text,
-      border: { fg: D.accentDim, bg: 'black' },
-    },
-    border: { type: 'line' },
-    padding: { left: 3, right: 3, top: 1, bottom: 1 },
-  });
-
-  // ── BOTTOM FOOTER ─────────────────────────────────────────────────
-  const footer = blessed.box({
-    parent: screen,
-    bottom: 0, left: 0,
-    width: '100%', height: 3,
-    tags: true,
-    content: '',
-    style: {
-      bg: 'black',
-      border: { fg: D.dim },
-    },
-    border: { type: 'line' },
+    style: { border: { fg: D.sep }, bg: D.bgSidebar, fg: D.muted },
     padding: { left: 1 },
   });
 
-  // ─────────────────────────────────────────────────────────────────
-  //  BUILD SIDEBAR ITEMS LIST
-  // ─────────────────────────────────────────────────────────────────
-  // Map from navList visual index → VIEWS index
-  const navMap = [];
+  // Main content panel
+  const wMain = blessed.box({
+    parent: screen,
+    top: HEADER_H + 1, left: SIDEBAR_W, right: 0, bottom: FOOTER_H,
+    tags: true,
+    scrollable: true, alwaysScroll: true, mouse: true,
+    border: { type: 'line' },
+    style: { border: { fg: D.accentDim }, bg: D.bg, fg: D.text },
+    padding: { left: 3, right: 3, top: 1, bottom: 1 },
+  });
 
-  const buildNavItems = () => {
-    navMap.length = 0;
-    const items = [];
+  // Footer
+  const wFooter = blessed.box({
+    parent: screen,
+    bottom: 0, left: 0, width: '100%', height: FOOTER_H,
+    tags: true, content: '',
+    border: { type: 'line' },
+    style: { border: { fg: D.sep }, bg: D.bg },
+    padding: { left: 1 },
+  });
+
+  // ─── RENDER HELPERS ───────────────────────────────────────────────
+
+  const setFooter = (...pairs) => {
+    wFooter.setContent(
+      '  ' + pairs.map(([k, v]) => `${t(D.accent, b(`[${k}]`))} ${mu(v)}`).join('   ')
+    );
+  };
+
+  const defaultFooter = () => setFooter(
+    ['↑/↓', 'Navigate'],
+    ['Enter', 'Select'],
+    ['?', 'Help'],
+    ['q', 'Quit'],
+  );
+
+  const setView = (id, lines, ...footerPairs) => {
+    const v = VIEWS.find(x => x && x.id === id);
+    const lbl = v ? `${v.icon}  ${v.label.toUpperCase()}` : id.toUpperCase();
+    wMain.setLabel(`{${D.accent}-fg} ${lbl} {/}`);
+    wMain.setContent('\n' + (Array.isArray(lines) ? lines.join('\n') : lines));
+    wMain.scrollTo(0);
+    footerPairs.length ? setFooter(...footerPairs) : defaultFooter();
+  };
+
+  // ─── SIDEBAR RENDERER ─────────────────────────────────────────────
+  const renderSidebar = () => {
+    const info = getActiveTunnel();
+
+    // Status pill
+    if (info) {
+      const upMin = Math.floor((Date.now() - new Date(info.startTime).getTime()) / 60000);
+      wStatus.setContent(
+        `  ${t(D.success, '⬤')} ${b(t(D.bright, 'CONNECTED'))}\n` +
+        `  ${mu(info.server.substring(0, SIDEBAR_W - 5))}\n` +
+        `  ${badge(info.mode)}  ${mu(upMin + 'm')}`
+      );
+    } else {
+      wStatus.setContent(
+        `  ${t(D.danger, '⬤')} ${b(t(D.muted, 'DISCONNECTED'))}\n` +
+        `  ${mu('No active tunnel')}`
+      );
+    }
+
+    // Nav items
+    const selectedViewsIdx = NAV[menuIdx];
+    const lines = [];
     for (let i = 0; i < VIEWS.length; i++) {
       const v = VIEWS[i];
       if (!v) {
-        items.push(dim('  ──────────────────'));
-        navMap.push(null); // separator
+        lines.push(mu(' ─────────────────────'));
+        continue;
+      }
+      const isSel      = i === selectedViewsIdx;
+      const iconColor  = v.danger ? D.danger : (isSel ? D.accent : D.muted);
+      const labelColor = isSel ? D.bright : D.text;
+      if (isSel) {
+        lines.push(`{${D.bgSel}-bg} ${t(iconColor, v.icon)}  ${b(t(labelColor, v.label))} {/}`);
       } else {
-        const color = v.danger ? D.danger : D.muted;
-        items.push(`${tag(color, v.icon)}  ${v.label}`);
-        navMap.push(i);
+        lines.push(`  ${t(iconColor, v.icon)}  ${t(labelColor, v.label)}`);
       }
     }
-    navList.setItems(items);
+    wNav.setContent(lines.join('\n'));
+
+    // Bottom hint
+    const sv = VIEWS[selectedViewsIdx];
+    wHint.setContent(sv ? `\n ${t(D.accent, sv.icon)}  ${mu(sv.label)}` : '');
   };
 
-  buildNavItems();
+  // ─── CONTENT VIEWS ────────────────────────────────────────────────
 
-  // ─────────────────────────────────────────────────────────────────
-  //  STATUS PILL (sidebar + header)
-  // ─────────────────────────────────────────────────────────────────
-  const updateSidebarStatus = () => {
-    const info = getActiveTunnel();
-    if (info) {
-      sidebarStatus.setContent(
-        `  ${tag(D.success, '⬤')} ${bold(tag(D.textBright, 'CONNECTED'))}\n` +
-        `  ${dim(info.server.substring(0, 18))}\n` +
-        `  ${modeBadge(info.mode)}`
-      );
-    } else {
-      sidebarStatus.setContent(
-        `  ${tag(D.danger, '⬤')} ${bold(tag(D.muted, 'DISCONNECTED'))}\n` +
-        `  ${dim('No active tunnel')}`
-      );
-    }
-  };
-
-  // ─────────────────────────────────────────────────────────────────
-  //  FOOTER UPDATER
-  // ─────────────────────────────────────────────────────────────────
-  const setFooter = (keys) => {
-    const parts = keys.map(([k, v]) =>
-      `${tag(D.accent, bold(`[${k}]`))} ${dim(v)}`
-    );
-    footer.setContent('  ' + parts.join('   '));
-  };
-
-  const defaultFooter = () => setFooter([
-    ['↑/↓', 'Navigate'],
-    ['Enter', 'Select'],
-    ['Tab', 'Switch Focus'],
-    ['?', 'Help'],
-    ['q', 'Quit'],
-  ]);
-
-  // ─────────────────────────────────────────────────────────────────
-  //  VIEW RENDERERS
-  // ─────────────────────────────────────────────────────────────────
-
-  const setView = (id, content, footerKeys) => {
-    const viewMeta = VIEWS.find(v => v && v.id === id);
-    const label = viewMeta ? `${viewMeta.icon}  ${viewMeta.label.toUpperCase()}` : id.toUpperCase();
-    mainPanel.setLabel(`{${D.accent}-fg} ${label} {/}`);
-    mainPanel.setContent(content);
-    mainPanel.scrollTo(0);
-    if (footerKeys) setFooter(footerKeys); else defaultFooter();
-    screen.render();
-  };
-
-  // ── HOME ─────────────────────────────────────────────────────────
   const renderHome = () => {
-    const info   = getActiveTunnel();
-    const lines  = [];
-
+    const info = getActiveTunnel();
+    const L = [];
     if (info) {
-      const uptimeMin = Math.floor((Date.now() - new Date(info.startTime).getTime()) / 60000);
-      const serverIp  = info.server.split('@').pop();
-      const ping      = pingServer(serverIp);
-      const wgStats   = getWgStats();
-
-      lines.push(`${tag(D.accent, bold('◈  Tunnel Status'))}    ${tag(D.success, '⬤  ACTIVE')}`);
-      lines.push(hr(48));
-      lines.push('');
-      lines.push(`  ${dim('Server  ')}  ${bold(info.server)}`);
-      lines.push(`  ${dim('Mode    ')}  ${modeBadge(info.mode)}`);
-      lines.push(`  ${dim('Uptime  ')}  ${tag(D.textBright, uptimeMin + ' min')}`);
-      lines.push(`  ${dim('Latency ')}  ${tag(D.accent, ping)}`);
-      if (wgStats) {
-        lines.push(`  ${dim('Data ↓  ')}  ${tag(D.success, formatBytes(wgStats.rx))}`);
-        lines.push(`  ${dim('Data ↑  ')}  ${tag(D.warning, formatBytes(wgStats.tx))}`);
+      const upMin = Math.floor((Date.now() - new Date(info.startTime).getTime()) / 60000);
+      const ping  = pingServer(info.server.split('@').pop());
+      const wg    = wgStats();
+      L.push(`${t(D.accent, b('◈  Tunnel Status'))}    ${t(D.success, '⬤  ACTIVE')}`);
+      L.push(hr()); L.push('');
+      L.push(`  ${mu('Server  ')}  ${b(info.server)}`);
+      L.push(`  ${mu('Mode    ')}  ${badge(info.mode)}`);
+      L.push(`  ${mu('Uptime  ')}  ${t(D.bright, upMin + ' min')}`);
+      L.push(`  ${mu('Latency ')}  ${t(D.accent, ping)}`);
+      if (wg) {
+        L.push(`  ${mu('Data ↓  ')}  ${t(D.success, fmtBytes(wg.rx))}`);
+        L.push(`  ${mu('Data ↑  ')}  ${t(D.warning, fmtBytes(wg.tx))}`);
       }
-      lines.push('');
-      lines.push(hr(48));
-      lines.push('');
-      lines.push(`  ${dim('Select')} ${tag(D.accent, 'Live Monitor')} ${dim('for real-time bandwidth graphs.')}`);
-      lines.push(`  ${dim('Select')} ${tag(D.accent, 'Disconnect')} ${dim('to tear down the tunnel.')}`);
+      L.push(''); L.push(hr()); L.push('');
+      L.push(`  ${mu('Go to ')}${t(D.accent, 'Live Monitor')} ${mu('for real-time bandwidth graphs.')}`);
+      L.push(`  ${mu('Go to ')}${t(D.danger,  'Disconnect')}  ${mu('to tear down the tunnel.')}`);
     } else {
-      lines.push(`${tag(D.accent, bold('◈  Welcome to Polaris VPN'))}`);
-      lines.push(hr(48));
-      lines.push('');
-      lines.push(`  ${tag(D.danger, '⬤')}  ${bold(tag(D.muted, 'No active tunnel found.'))}`);
-      lines.push('');
-      lines.push(`  ${dim('Get started by connecting to a server.')}`);
-      lines.push('');
-      lines.push(hr(48));
-      lines.push('');
-
       const { profiles, active } = getProfiles();
       const names = Object.keys(profiles);
+      L.push(`${t(D.accent, b('◈  Welcome to Polaris VPN'))}`);
+      L.push(hr()); L.push('');
+      L.push(`  ${t(D.danger, '⬤')}  ${b(t(D.muted, 'No active tunnel.'))}`); L.push('');
       if (names.length > 0) {
-        lines.push(`  ${tag(D.accent, bold('Saved Profiles'))}`);
-        lines.push('');
+        L.push(`  ${t(D.accent, b('Saved Profiles'))}`); L.push('');
         names.forEach((n, i) => {
-          const isActive = n === active;
-          lines.push(
-            `  ${dim((i + 1) + '.')}  ${tag(isActive ? D.success : D.text, n)}` +
-            `   ${dim(profiles[n])}` +
-            (isActive ? `  ${tag(D.success, '← active')}` : '')
+          const act = n === active;
+          L.push(
+            `  ${mu((i + 1) + '.')}  ${t(act ? D.success : D.text, n)}` +
+            `   ${mu(profiles[n])}` +
+            (act ? `  ${t(D.success, '← active')}` : '')
           );
         });
-        lines.push('');
-        lines.push(`  ${dim('Select')} ${tag(D.accent, 'Quick Connect')} ${dim('to use the active profile.')}`);
+        L.push(''); L.push(hr()); L.push('');
+        L.push(`  ${mu('Use ')}${t(D.accent, 'Servers')}${mu(' to connect.')}`);
       } else {
-        lines.push(`  ${tag(D.warning, '⚠')}  ${dim('No profiles saved.')}`);
-        lines.push('');
-        lines.push(`  ${dim('Run')} ${tag(D.accent, 'polaris add <alias> --server <user@host>')} ${dim('to add one.')}`);
-        lines.push(`  ${dim('Or select')} ${tag(D.accent, 'Deploy VPS')} ${dim('to provision one automatically.')}`);
+        L.push(`  ${t(D.warning, '⚠')}  ${mu('No profiles saved yet.')}`); L.push('');
+        L.push(`  ${mu('Run: ')}${t(D.accent, 'polaris add <alias> --server <user@host>')}`);
       }
     }
-
-    setView('home', '\n' + lines.join('\n'));
+    setView('home', L);
   };
 
-  // ── SERVERS ───────────────────────────────────────────────────────
-  let serverSelectIndex = 0;
   const renderServers = () => {
     const { profiles, active } = getProfiles();
     const names = Object.keys(profiles);
-    const lines = [];
-
-    lines.push(`${tag(D.accent, bold('⚙  Server Profiles'))}`);
-    lines.push(hr(48));
-    lines.push('');
-
+    const L = [];
+    L.push(`${t(D.accent, b('⚙  Server Profiles'))}`); L.push(hr()); L.push('');
     if (names.length === 0) {
-      lines.push(`  ${tag(D.warning, '⚠')}  No saved profiles found.`);
-      lines.push('');
-      lines.push(`  ${dim('Add a server:')}`);
-      lines.push(`  ${tag(D.accent, 'polaris add <alias> --server <user@host>')}`);
+      L.push(`  ${t(D.warning, '⚠')}  No saved profiles.`); L.push('');
+      L.push(`  ${mu('Run: ')}${t(D.accent, 'polaris add <alias> --server <user@host>')}`);
     } else {
-      lines.push(`  ${dim('Use')} ${tag(D.accent, '[↑/↓]')} ${dim('to browse,')} ${tag(D.accent, '[Enter]')} ${dim('to connect.')}`);
-      lines.push('');
-
+      L.push(`  ${t(D.accent, '[↑/↓]')}${mu(' Browse   ')}${t(D.accent, '[Enter]')}${mu(' Connect')}`); L.push('');
       names.forEach((n, i) => {
-        const isSelected = i === serverSelectIndex;
-        const isActive   = n === active;
-        const cursor     = isSelected ? tag(D.accent, '▶') : ' ';
-        const nameTag    = isSelected
-          ? `{${D.accent}-fg}{bold}${n}{/bold}{/}`
-          : isActive ? tag(D.success, n) : n;
-        const pill       = isActive ? `  ${tag(D.success, '⬤ active')}` : '';
-
-        lines.push(`  ${cursor}  ${nameTag}${pill}`);
-        lines.push(`      ${dim(profiles[n])}`);
-        lines.push('');
+        const sel = i === srvIdx, act = n === active;
+        const cur  = sel ? t(D.accent, '▶') : ' ';
+        const name = sel ? b(t(D.bright, n)) : t(act ? D.success : D.text, n);
+        const pill = act ? `  ${t(D.success, '⬤')}` : '';
+        L.push(`  ${cur}  ${name}${pill}`);
+        L.push(`      ${mu(profiles[n])}`);
+        L.push('');
       });
-
-      lines.push(hr(48));
-      lines.push('');
-      lines.push(`  ${dim('Selected:')} ${tag(D.accent, names[serverSelectIndex] || '—')}`);
+      L.push(hr());
+      L.push(`  ${mu('Selected: ')}${t(D.accent, names[srvIdx] || '—')}`);
     }
-
-    setView('servers', '\n' + lines.join('\n'), [
-      ['↑/↓',  'Browse'],
-      ['Enter', 'Connect to selected'],
-      ['d',     'Delete profile'],
-      ['Esc',   'Back'],
-    ]);
+    setView('servers', L, ['↑/↓', 'Browse'], ['Enter', 'Connect'], ['Esc', 'Back']);
   };
 
-  // ── PRIVACY CHECK ─────────────────────────────────────────────────
   const renderCheck = () => {
-    const lines = [];
-    lines.push(`${tag(D.accent, bold('✦  Privacy Check'))}`);
-    lines.push(hr(48));
-    lines.push('');
-    lines.push(`  This will run three leak tests:`);
-    lines.push('');
-    lines.push(`  ${tag(D.success, '①')}  ${bold('Public IP Check')}   ${dim('— verify your IP has changed')}`);
-    lines.push(`  ${tag(D.success, '②')}  ${bold('DNS Leak Test')}     ${dim('— verify DNS uses VPN resolver')}`);
-    lines.push(`  ${tag(D.success, '③')}  ${bold('IPv6 Leak Test')}    ${dim('— verify no IPv6 exposure')}`);
-    lines.push('');
-    lines.push(hr(48));
-    lines.push('');
-    lines.push(`  Press ${tag(D.accent, '[Enter]')} to run all three checks.`);
-    lines.push(`  ${dim('This will suspend the TUI briefly.')}`);
-    setView('check', '\n' + lines.join('\n'), [['Enter', 'Run checks'], ['Esc', 'Back']]);
+    const L = [];
+    L.push(`${t(D.accent, b('✦  Privacy Check'))}`); L.push(hr()); L.push('');
+    L.push(`  ${b('Three-point leak test:')}`); L.push('');
+    [[D.success,'①','Public IP Check','Verify your IP has changed'],
+     [D.success,'②','DNS Leak Test',  'Verify DNS uses VPN resolver'],
+     [D.success,'③','IPv6 Leak Test', 'Verify no IPv6 exposure']].forEach(([c,n,ti,de]) => {
+      L.push(`  ${t(c, n)}  ${b(ti)}   ${mu(de)}`);
+    });
+    L.push(''); L.push(hr()); L.push('');
+    L.push(`  Press ${t(D.accent, '[Enter]')} to run all checks.`);
+    L.push(`  ${mu('Briefly suspends the TUI.')}`);
+    setView('check', L, ['Enter', 'Run checks'], ['Esc', 'Back']);
   };
 
-  // ── DEPLOY ────────────────────────────────────────────────────────
   const renderDeploy = () => {
-    const lines = [];
-    lines.push(`${tag(D.accent, bold('⊕  Deploy a VPS Server'))}`);
-    lines.push(hr(48));
-    lines.push('');
-    lines.push(`  Polaris can automatically provision a remote VPS`);
-    lines.push(`  with WireGuard or AmneziaWG in under 60 seconds.`);
-    lines.push('');
-    lines.push(hr(48));
-    lines.push('');
-    lines.push(`  ${tag(D.accent, bold('Supported Modes'))}`);
-    lines.push('');
-    lines.push(`  ${tag(D.success, '▶')}  ${bold('WireGuard')}    ${dim('— Fast, modern VPN protocol')}`);
-    lines.push(`  ${tag(D.purple, '▶')}  ${bold('AmneziaWG')}   ${dim('— Stealth mode (DPI bypass)')}`);
-    lines.push('');
-    lines.push(hr(48));
-    lines.push('');
-    lines.push(`  Press ${tag(D.accent, '[Enter]')} to start the deployment wizard.`);
-    lines.push('');
-    lines.push(`  ${dim('Or run directly:')}`);
-    lines.push(`  ${tag(D.accent, 'polaris deploy --server ubuntu@<ip>')}`);
-    setView('deploy', '\n' + lines.join('\n'), [['Enter', 'Deploy wizard'], ['Esc', 'Back']]);
+    const L = [];
+    L.push(`${t(D.accent, b('⊕  Deploy a VPS Server'))}`); L.push(hr()); L.push('');
+    L.push(`  Polaris automatically provisions a remote VPS`);
+    L.push(`  with WireGuard or AmneziaWG in under 60 seconds.`);
+    L.push(''); L.push(hr()); L.push('');
+    L.push(`  ${t(D.accent, b('Modes'))}`); L.push('');
+    L.push(`  ${t(D.success, '▶')}  ${b('WireGuard')}    ${mu('Fast, modern VPN protocol')}`);
+    L.push(`  ${t(D.purple,  '▶')}  ${b('AmneziaWG')}   ${mu('Stealth mode — DPI bypass')}`);
+    L.push(''); L.push(hr()); L.push('');
+    L.push(`  Press ${t(D.accent, '[Enter]')} to start the deployment wizard.`);
+    L.push(`  ${mu('Or run: ')}${t(D.accent, 'polaris deploy --server ubuntu@<ip>')}`);
+    setView('deploy', L, ['Enter', 'Deploy wizard'], ['Esc', 'Back']);
   };
 
-  // ── PEERS ─────────────────────────────────────────────────────────
   const renderPeers = () => {
-    const lines = [];
-    lines.push(`${tag(D.accent, bold('≡  WireGuard Peers'))}`);
-    lines.push(hr(48));
-    lines.push('');
-
-    const dumpRes = spawnSync('sudo', ['wg', 'show', 'all', 'dump'], { encoding: 'utf-8' });
-    if (dumpRes.status !== 0 || !dumpRes.stdout.trim()) {
-      lines.push(`  ${tag(D.warning, '⚠')}  No WireGuard interface found.`);
-      lines.push(`  ${dim('Start a WireGuard tunnel first.')}`);
+    const L = [];
+    L.push(`${t(D.accent, b('≡  WireGuard Peers'))}`); L.push(hr()); L.push('');
+    const r = spawnSync('sudo', ['wg', 'show', 'all', 'dump'], { encoding: 'utf-8' });
+    if (r.status !== 0 || !r.stdout.trim()) {
+      L.push(`  ${t(D.warning, '⚠')}  No WireGuard interface found.`);
+      L.push(`  ${mu('Start a WireGuard tunnel first.')}`);
     } else {
-      const rows = dumpRes.stdout.trim().split('\n').slice(1);
+      const rows = r.stdout.trim().split('\n').slice(1);
       if (rows.length === 0) {
-        lines.push(`  ${dim('No peers configured.')}`);
+        L.push(`  ${mu('No peers configured.')}`);
       } else {
-        lines.push(`  ${dim('Peer Key         Endpoint              RX          TX')}`);
-        lines.push(`  ${hr(52)}`);
-        rows.forEach(r => {
-          const p = r.split('\t');
-          const key = (p[1] || '').substring(0, 10) + '…';
-          const ep  = (p[4] || 'N/A').substring(0, 20);
-          const rx  = formatBytes(parseInt(p[6], 10) || 0);
-          const tx  = formatBytes(parseInt(p[7], 10) || 0);
-          lines.push(
-            `  ${tag(D.accent, key)}  ${dim(ep.padEnd(20))}  ` +
-            `${tag(D.success, rx.padStart(8))}  ${tag(D.warning, tx.padStart(8))}`
-          );
+        L.push(`  ${mu('Peer Key        Endpoint              RX          TX')}`);
+        L.push(`  ${hr(52)}`);
+        rows.forEach(row => {
+          const p   = row.split('\t');
+          const key = ((p[1] || '').substring(0, 10) + '…').padEnd(14);
+          const ep  = (p[4] || 'N/A').substring(0, 18).padEnd(20);
+          const rx  = fmtBytes(parseInt(p[6], 10) || 0).padStart(8);
+          const tx  = fmtBytes(parseInt(p[7], 10) || 0).padStart(8);
+          L.push(`  ${t(D.accent, key)}  ${mu(ep)}  ${t(D.success, rx)}  ${t(D.warning, tx)}`);
         });
-        lines.push('');
-        lines.push(`  ${dim(rows.length + ' peer(s) found.')}`);
+        L.push(''); L.push(mu(`  ${rows.length} peer(s) found.`));
       }
     }
-    setView('peers', '\n' + lines.join('\n'), [['r', 'Refresh'], ['Esc', 'Back']]);
+    setView('peers', L, ['r', 'Refresh'], ['Esc', 'Back']);
   };
 
-  // ── DISCONNECT CONFIRM ────────────────────────────────────────────
   const renderDisconnect = () => {
     const info = getActiveTunnel();
-    const lines = [];
-    lines.push(`${tag(D.danger, bold('■  Disconnect Tunnel'))}`);
-    lines.push(hr(48));
-    lines.push('');
+    const L = [];
+    L.push(`${t(D.danger, b('■  Disconnect Tunnel'))}`); L.push(hr()); L.push('');
     if (!info) {
-      lines.push(`  ${tag(D.muted, '⬤')}  No active tunnel to disconnect.`);
-      lines.push('');
-      lines.push(`  Press ${tag(D.accent, '[Esc]')} or ${tag(D.accent, '[h]')} to return home.`);
+      L.push(`  ${t(D.muted, '⬤')}  ${mu('No active tunnel to disconnect.')}`);
+      L.push(''); L.push(`  Press ${t(D.accent, '[Esc]')} to go back.`);
+      setView('disconnect', L, ['Esc', 'Back']);
     } else {
-      lines.push(`  ${tag(D.danger, '⚠')}  You are about to disconnect:`);
-      lines.push('');
-      lines.push(`  ${dim('Server')}  ${bold(info.server)}`);
-      lines.push(`  ${dim('Mode  ')}  ${modeBadge(info.mode)}`);
-      lines.push('');
-      lines.push(hr(48));
-      lines.push('');
-      lines.push(`  Press ${tag(D.danger, bold('[y]'))} to confirm, or ${tag(D.accent, '[n]')} to cancel.`);
+      L.push(`  ${t(D.danger, '⚠')}  ${b('You are about to disconnect:')}`); L.push('');
+      L.push(`  ${mu('Server  ')}  ${b(info.server)}`);
+      L.push(`  ${mu('Mode    ')}  ${badge(info.mode)}`);
+      L.push(''); L.push(hr()); L.push('');
+      L.push(`  ${t(D.danger, b('[y]'))} to confirm   ${t(D.accent, '[n]')} or ${t(D.accent, '[Esc]')} to cancel.`);
+      setView('disconnect', L, ['y', 'Confirm'], ['n / Esc', 'Cancel']);
     }
-    setView('disconnect', '\n' + lines.join('\n'), [['y', 'Confirm disconnect'], ['n/Esc', 'Cancel']]);
   };
 
-  // ── HELP ─────────────────────────────────────────────────────────
   const renderHelp = () => {
-    const lines = [];
-    lines.push(`${tag(D.accent, bold('?  Keyboard Shortcuts'))}`);
-    lines.push(hr(48));
-    lines.push('');
-    lines.push(`  ${tag(D.accent, bold('Navigation'))}`);
-    lines.push('');
-    lines.push(`  ${tag(D.accent, '↑ / ↓')}         Navigate menu items`);
-    lines.push(`  ${tag(D.accent, 'Enter')}         Select / confirm action`);
-    lines.push(`  ${tag(D.accent, 'Tab')}           Switch focus (sidebar ↔ panel)`);
-    lines.push(`  ${tag(D.accent, 'Esc / Backspace')}  Go back / cancel`);
-    lines.push(`  ${tag(D.accent, 'h')}             Go to Home`);
-    lines.push(`  ${tag(D.accent, '?')}             Toggle this help`);
-    lines.push(`  ${tag(D.accent, 'q / Ctrl+C')}   Quit Polaris`);
-    lines.push('');
-    lines.push(`  ${tag(D.accent, bold('Views'))}`);
-    lines.push('');
-    lines.push(`  ${tag(D.accent, '1')}             Home`);
-    lines.push(`  ${tag(D.accent, '2')}             Servers`);
-    lines.push(`  ${tag(D.accent, '3')}             Quick Connect`);
-    lines.push(`  ${tag(D.accent, '4')}             Live Monitor`);
-    lines.push(`  ${tag(D.accent, '5')}             Peers`);
-    lines.push(`  ${tag(D.accent, '6')}             Privacy Check`);
-    lines.push(`  ${tag(D.accent, '7')}             Deploy VPS`);
-    lines.push('');
-    lines.push(hr(48));
-    lines.push('');
-    lines.push(`  ${dim('Press')} ${tag(D.accent, '[?]')} ${dim('again or')} ${tag(D.accent, '[Esc]')} ${dim('to close.')}`);
-    setView('help', '\n' + lines.join('\n'));
+    const L = [];
+    L.push(`${t(D.accent, b('?  Keyboard Shortcuts'))}`); L.push(hr()); L.push('');
+    L.push(`  ${t(D.accent, b('Navigation'))}`); L.push('');
+    [
+      ['↑ / k',       'Move up in sidebar menu'],
+      ['↓ / j',       'Move down in sidebar menu'],
+      ['Enter',       'Select highlighted item / confirm'],
+      ['Esc',         'Go back to Home / cancel'],
+      ['h',           'Go to Home'],
+      ['?',           'Toggle this help screen'],
+      ['q / Ctrl+C',  'Quit Polaris'],
+    ].forEach(([k, v]) => L.push(`  ${t(D.accent, k.padEnd(16))} ${mu(v)}`));
+    L.push('');
+    L.push(`  ${t(D.accent, b('Quick Jump'))}`); L.push('');
+    [['1','Home'],['2','Servers'],['3','Quick Connect'],
+     ['4','Live Monitor'],['5','Peers'],['6','Privacy Check'],['7','Deploy VPS']]
+      .forEach(([k, v]) => L.push(`  ${t(D.accent, k.padEnd(16))} ${mu(v)}`));
+    setView('help', L, ['?', 'Close'], ['Esc', 'Back']);
   };
 
-  // ─────────────────────────────────────────────────────────────────
-  //  SUSPEND TUI → RUN CMD → RESUME
-  // ─────────────────────────────────────────────────────────────────
-  const suspendAndRun = async (asyncFn) => {
+  // ─── SUSPEND + RUN COMMAND ────────────────────────────────────────
+  const runCmd = async (fn) => {
     screen.destroy();
-    process.stdout.write('\x1b[2J\x1b[0;0H');
-    console.log('\x1b[36m\n  Polaris VPN\x1b[0m  \x1b[90m—\x1b[0m  \x1b[90mRunning command...\x1b[0m\n');
+    process.stdout.write('\x1b[2J\x1b[H');
+    console.log(`\x1b[36m\n  Polaris VPN \x1b[0m\x1b[90m— running command...\x1b[0m\n`);
     try {
-      await asyncFn();
+      await fn();
     } catch (err) {
       console.error('\n\x1b[31m  Error:\x1b[0m', err.message);
     }
-    console.log('\n\x1b[90m  ─────────────────────────────────────────────\x1b[0m');
-    console.log('\x1b[36m  Press any key to return to Polaris...\x1b[0m');
+    console.log('\n\x1b[90m  ─────────────────────────────────\x1b[0m');
+    console.log('\x1b[36m  Press any key to return...\x1b[0m');
     await new Promise(resolve => {
       process.stdin.setRawMode(true);
       process.stdin.resume();
@@ -608,189 +476,183 @@ export default async () => {
         resolve();
       });
     });
-    // Re-launch
     const m = await import('./tui.js');
     await m.default();
   };
 
-  // ─────────────────────────────────────────────────────────────────
-  //  CURRENT VIEW STATE
-  // ─────────────────────────────────────────────────────────────────
-  let currentView  = 'home';
-  let helpVisible  = false;
-
-  const navigateTo = async (viewId) => {
+  // ─── ACTIVATE A VIEW ──────────────────────────────────────────────
+  const goto = async (viewId) => {
     currentView = viewId;
-    helpVisible = viewId === 'help';
 
+    // Sync sidebar highlight
+    const vi = VIEWS.findIndex(v => v && v.id === viewId);
+    const ni = NAV.indexOf(vi);
+    if (ni !== -1) menuIdx = ni;
+
+    renderSidebar();
+    screen.render();
+
+    // Delegated actions
+    if (viewId === 'connect') {
+      await runCmd(async () => {
+        const run = (await import('./start.js')).default;
+        await run({ mode: 'auto', json: false });
+      });
+      return;
+    }
+    if (viewId === 'dashboard') {
+      screen.destroy();
+      await (await import('./dashboard.js')).default();
+      return;
+    }
+    if (viewId === 'quit') { process.exit(0); }
+
+    // Render static content views
     switch (viewId) {
       case 'home':       renderHome();       break;
-      case 'servers':    serverSelectIndex = 0; renderServers(); break;
-      case 'check':      renderCheck();     break;
-      case 'deploy':     renderDeploy();    break;
-      case 'peers':      renderPeers();     break;
+      case 'servers':    srvIdx = 0; renderServers(); break;
+      case 'check':      renderCheck();      break;
+      case 'deploy':     renderDeploy();     break;
+      case 'peers':      renderPeers();      break;
       case 'disconnect': renderDisconnect(); break;
-      case 'help':       renderHelp();      break;
-
-      case 'connect':
-        await suspendAndRun(async () => {
-          const run = (await import('./start.js')).default;
-          await run({ mode: 'auto', json: false });
-        });
-        break;
-
-      case 'dashboard':
-        screen.destroy();
-        const dash = (await import('./dashboard.js')).default;
-        await dash();
-        break;
-
-      case 'quit':
-        process.exit(0);
+      case 'help':       renderHelp();       break;
     }
+    screen.render();
   };
 
-  // ─────────────────────────────────────────────────────────────────
-  //  HANDLE NAVLIST SELECTION (hover hint)
-  // ─────────────────────────────────────────────────────────────────
-  navList.on('select item', (_, listIdx) => {
-    const viewIdx = navMap[listIdx];
-    if (viewIdx === null || viewIdx === undefined) return;
-    const v = VIEWS[viewIdx];
-    if (!v) return;
-    sidebarHint.setContent(`\n  ${dim(v.icon + '  ' + v.label)}`);
-    screen.render();
-  });
-
-  // ─────────────────────────────────────────────────────────────────
-  //  HANDLE NAVLIST ENTER
-  // ─────────────────────────────────────────────────────────────────
-  navList.on('select', async (_, listIdx) => {
-    const viewIdx = navMap[listIdx];
-    if (viewIdx === null || viewIdx === undefined) return;
-    const v = VIEWS[viewIdx];
-    if (!v) return;
-    await navigateTo(v.id);
-  });
-
-  // ─────────────────────────────────────────────────────────────────
-  //  GLOBAL KEYBOARD SHORTCUTS
-  // ─────────────────────────────────────────────────────────────────
+  // ─── KEYBOARD: ALL HANDLED HERE, NO BLESSED.LIST FOCUS FIGHTS ────
   screen.key(['q', 'C-c'], () => process.exit(0));
-  screen.key(['?'],  () => { helpVisible ? navigateTo('home') : navigateTo('help'); });
-  screen.key(['h'],  () => navigateTo('home'));
-  screen.key(['1'],  () => navigateTo('home'));
-  screen.key(['2'],  () => navigateTo('servers'));
-  screen.key(['3'],  () => navigateTo('connect'));
-  screen.key(['4'],  () => navigateTo('dashboard'));
-  screen.key(['5'],  () => navigateTo('peers'));
-  screen.key(['6'],  () => navigateTo('check'));
-  screen.key(['7'],  () => navigateTo('deploy'));
+  screen.key(['?'], () => goto(currentView === 'help' ? 'home' : 'help'));
+  screen.key(['h'], () => goto('home'));
+  screen.key(['1'], () => goto('home'));
+  screen.key(['2'], () => goto('servers'));
+  screen.key(['3'], () => goto('connect'));
+  screen.key(['4'], () => goto('dashboard'));
+  screen.key(['5'], () => goto('peers'));
+  screen.key(['6'], () => goto('check'));
+  screen.key(['7'], () => goto('deploy'));
 
   screen.key(['escape', 'backspace'], () => {
-    if (currentView !== 'home') navigateTo('home');
+    if (currentView !== 'home') goto('home');
   });
 
-  // ── Servers view: arrow nav within servers panel ──
-  screen.key(['up'],   () => {
+  screen.key(['n'], () => {
+    if (currentView === 'disconnect') goto('home');
+  });
+
+  screen.key(['r'], () => {
+    if (currentView === 'peers') { renderPeers(); screen.render(); }
+  });
+
+  // ── Arrow keys — context-aware ───────────────────────────────────
+  screen.key(['up', 'k'], () => {
     if (currentView === 'servers') {
       const { profiles } = getProfiles();
-      const names = Object.keys(profiles);
-      if (names.length > 0) {
-        serverSelectIndex = (serverSelectIndex - 1 + names.length) % names.length;
-        renderServers();
+      const n = Object.keys(profiles).length;
+      if (n > 0) { srvIdx = (srvIdx - 1 + n) % n; renderServers(); screen.render(); }
+    } else {
+      if (menuIdx > 0) {
+        menuIdx--;
+        renderSidebar();
+        screen.render();
       }
     }
   });
-  screen.key(['down'], () => {
+
+  screen.key(['down', 'j'], () => {
     if (currentView === 'servers') {
       const { profiles } = getProfiles();
-      const names = Object.keys(profiles);
-      if (names.length > 0) {
-        serverSelectIndex = (serverSelectIndex + 1) % names.length;
-        renderServers();
+      const n = Object.keys(profiles).length;
+      if (n > 0) { srvIdx = (srvIdx + 1) % n; renderServers(); screen.render(); }
+    } else {
+      if (menuIdx < NAV.length - 1) {
+        menuIdx++;
+        renderSidebar();
+        screen.render();
       }
     }
   });
 
-  // ── Servers view: Enter to connect to selected ──
+  // ── Enter ────────────────────────────────────────────────────────
   screen.key(['enter'], async () => {
     if (currentView === 'servers') {
       const { profiles } = getProfiles();
       const names = Object.keys(profiles);
       if (names.length > 0) {
-        const server = profiles[names[serverSelectIndex]];
-        await suspendAndRun(async () => {
+        await runCmd(async () => {
           const run = (await import('./start.js')).default;
-          await run({ server, mode: 'auto', json: false });
+          await run({ server: profiles[names[srvIdx]], mode: 'auto', json: false });
         });
       }
     } else if (currentView === 'check') {
-      await suspendAndRun(async () => {
+      await runCmd(async () => {
         const run = (await import('./check.js')).default;
         await run({ json: false });
       });
     } else if (currentView === 'deploy') {
-      await suspendAndRun(async () => {
+      await runCmd(async () => {
         console.log('\n  \x1b[36mTo deploy, run:\x1b[0m');
         console.log('  \x1b[90mpolaris deploy --server ubuntu@<your-ip>\x1b[0m\n');
       });
     } else if (currentView === 'peers') {
-      renderPeers(); // refresh
+      renderPeers(); screen.render();
+    } else {
+      // Enter navigates to the currently highlighted sidebar item
+      const v = VIEWS[NAV[menuIdx]];
+      if (v) await goto(v.id);
     }
   });
 
-  // ── Disconnect confirm: y/n ──
+  // ── Disconnect confirm ───────────────────────────────────────────
   screen.key(['y'], async () => {
     if (currentView !== 'disconnect') return;
-    await suspendAndRun(async () => {
+    await runCmd(async () => {
       const run = (await import('./stop.js')).default;
       await run({ json: false });
     });
   });
-  screen.key(['n'], () => {
-    if (currentView === 'disconnect') navigateTo('home');
+
+  // ── Mouse click on sidebar nav ───────────────────────────────────
+  wNav.on('click', async (data) => {
+    const row = data.y; // row index within wNav content
+    if (row >= 0 && row < VIEWS.length) {
+      const v = VIEWS[row];
+      if (v) {
+        const ni = NAV.indexOf(VIEWS.indexOf(v));
+        if (ni !== -1) menuIdx = ni;
+        await goto(v.id);
+      }
+    }
   });
 
-  // ── Peers: refresh ──
-  screen.key(['r'], () => {
-    if (currentView === 'peers') renderPeers();
-  });
-
-  // ── Tab: switch focus ──
-  screen.key(['tab'], () => {
-    if (screen.focused === navList) {
-      mainPanel.focus();
-      sidebarBorder.style.border.fg = D.dim;
-      mainPanel.style.border.fg     = D.accent;
-    } else {
-      navList.focus();
-      sidebarBorder.style.border.fg = D.accent;
-      mainPanel.style.border.fg     = D.accentDim;
+  // ─── RESIZE ───────────────────────────────────────────────────────
+  screen.on('resize', () => {
+    screen.realloc();
+    renderSidebar();
+    switch (currentView) {
+      case 'home':       renderHome();       break;
+      case 'servers':    renderServers();    break;
+      case 'check':      renderCheck();      break;
+      case 'deploy':     renderDeploy();     break;
+      case 'peers':      renderPeers();      break;
+      case 'disconnect': renderDisconnect(); break;
+      case 'help':       renderHelp();       break;
     }
     screen.render();
   });
 
-  // ─────────────────────────────────────────────────────────────────
-  //  AUTO-REFRESH
-  // ─────────────────────────────────────────────────────────────────
-  const autoRefresh = () => {
-    updateSidebarStatus();
-    if (currentView === 'home') renderHome();
+  // ─── AUTO-REFRESH STATUS ──────────────────────────────────────────
+  setInterval(() => {
+    renderSidebar();
+    if (currentView === 'home')  renderHome();
     if (currentView === 'peers') renderPeers();
     screen.render();
-  };
+  }, 5000);
 
-  setInterval(autoRefresh, 4000);
-
-  // ─────────────────────────────────────────────────────────────────
-  //  INIT
-  // ─────────────────────────────────────────────────────────────────
-  sidebarBorder.style.border.fg = D.accent;
-  updateSidebarStatus();
+  // ─── INIT ─────────────────────────────────────────────────────────
   defaultFooter();
+  renderSidebar();
   renderHome();
-
-  navList.focus();
+  wMain.focus();
   screen.render();
 };
