@@ -141,7 +141,7 @@ export default async () => {
     content: [
       '',
       `${mu('version ')}${t(D.accent, pkg.version)}`,
-      mu('Leave no trace.'),
+      mu('Command your privacy.'),
       mu('─────────────────────'),
     ].join('\n'),
     style: { bg: D.bg }, align: 'right',
