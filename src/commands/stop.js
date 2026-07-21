@@ -1,4 +1,6 @@
 import { stopActiveTunnel } from '../core/tunnel-service.js';
+import { stopDnsResolver } from '../core/dns-service.js';
+import { restoreSystemDns } from '../net/system-dns.js';
 import { printSuccess, printInfo, printError } from '../utils/display.js';
 
 export default async (options) => {
@@ -6,6 +8,11 @@ export default async (options) => {
   
   try {
     const info = stopActiveTunnel(isJson);
+
+    // Restore system DNS and stop DoH resolver
+    restoreSystemDns();
+    stopDnsResolver();
+
     if (!info) {
       if (isJson) {
         console.log(JSON.stringify({ success: true, message: 'No active tunnel found.' }));

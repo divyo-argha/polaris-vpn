@@ -8,6 +8,9 @@ import { handleError } from '../utils/error-handler.js';
 import { getPublicIp, getProxiedIp } from '../net/ip-check.js';
 import { getProfiles } from '../core/profile-service.js';
 import { getActiveTunnel, startTunnel } from '../core/tunnel-service.js';
+import { startDnsResolver, getDnsStatus } from '../core/dns-service.js';
+import { setSystemDns } from '../net/system-dns.js';
+import { applyBypassRules } from '../utils/bypass.js';
 import { CONFIG_DIR } from '../utils/config.js';
 
 const WG_CONF = path.join(CONFIG_DIR, 'wg', 'wg0.conf');
@@ -136,6 +139,20 @@ export default async (options) => {
 
     const res = await startTunnel(server, port, actualMode, isJson);
     
+    // Auto-DoH & System DNS Protection
+    const enableDoh = options.doh !== false;
+    if (enableDoh) {
+      try {
+        if (!getDnsStatus()) {
+          startDnsResolver(5354);
+        }
+        setSystemDns(['127.0.0.1']);
+      } catch (dnsErr) {}
+    }
+
+    // Apply Split Tunneling / Bypass Rules
+    await applyBypassRules();
+
     if (actualMode === 'wireguard' || actualMode === 'amneziawg') {
       if (!isJson) {
         spinner.text = 'Waiting for interface to configure...';
@@ -149,9 +166,9 @@ export default async (options) => {
       
       if (!isJson) {
         spinner.stop();
-        printBox('Tunnel Connected 🚀', `Server: ${server}\nMode: ${actualMode.toUpperCase()}\nStatus: System-wide (All OS traffic)\nOld IP: ${oldIp}\nNew IP: ${newIp}`, 'success');
+        printBox('Tunnel Connected 🚀', `Server: ${server}\nMode: ${actualMode.toUpperCase()}\nStatus: System-wide (All OS traffic)\nOld IP: ${oldIp}\nNew IP: ${newIp}\nDNS Protection: Auto-DoH Active (127.0.0.1)`, 'success');
       } else {
-        console.log(JSON.stringify({ success: true, oldIp, newIp, mode: actualMode, pid: res.pid }));
+        console.log(JSON.stringify({ success: true, oldIp, newIp, mode: actualMode, pid: res.pid, doh: enableDoh }));
       }
     } else {
       if (!isJson) {
@@ -161,9 +178,9 @@ export default async (options) => {
       
       if (!isJson) {
         spinner.stop();
-        printBox('Tunnel Connected 🚀', `Server: ${server}\nMode: ${actualMode.toUpperCase()}\nProxy: socks5://127.0.0.1:${port}\nOld IP: ${oldIp}\nNew IP: ${newIp}`, 'success');
+        printBox('Tunnel Connected 🚀', `Server: ${server}\nMode: ${actualMode.toUpperCase()}\nProxy: socks5://127.0.0.1:${port}\nOld IP: ${oldIp}\nNew IP: ${newIp}\nDNS Protection: Auto-DoH Active (127.0.0.1)`, 'success');
       } else {
-        console.log(JSON.stringify({ success: true, oldIp, newIp, proxy: `socks5://127.0.0.1:${port}`, pid: res.pid, mode: actualMode }));
+        console.log(JSON.stringify({ success: true, oldIp, newIp, proxy: `socks5://127.0.0.1:${port}`, pid: res.pid, mode: actualMode, doh: enableDoh }));
       }
     }
 

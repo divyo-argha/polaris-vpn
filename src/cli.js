@@ -46,6 +46,7 @@ program
   .option('-s, --server <user@host>', 'SSH/TLS/WireGuard server to connect to')
   .option('-p, --port <number>', 'Local SOCKS5 port to bind', '1080')
   .option('-m, --mode <type>', 'Tunnel mode: ssh, tls, wireguard, amneziawg or auto', 'auto')
+  .option('--no-doh', 'Disable automatic DoH system DNS protection')
   .action(async (options, cmd) => {
     if (!cmd.optsWithGlobals().json) printBanner();
     try {
@@ -287,6 +288,47 @@ peerCmd
     try {
       const { peerQr } = await import('./commands/peer.js');
       await peerQr(name, cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
+const bypassCmd = program.command('bypass').description('Manage split tunneling and bypass rules');
+
+bypassCmd
+  .command('add <target>')
+  .description('Add a domain or IP subnet to bypass rules')
+  .action(async (target, options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { bypassAdd } = await import('./commands/bypass.js');
+      await bypassAdd(target, cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
+bypassCmd
+  .command('remove <target>')
+  .description('Remove a domain or IP subnet from bypass rules')
+  .action(async (target, options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { bypassRemove } = await import('./commands/bypass.js');
+      await bypassRemove(target, cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
+bypassCmd
+  .command('list')
+  .description('List all active bypass rules')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { bypassList } = await import('./commands/bypass.js');
+      await bypassList(cmd.optsWithGlobals());
     } catch (err) {
       handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
