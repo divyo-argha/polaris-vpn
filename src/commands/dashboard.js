@@ -1,7 +1,7 @@
 import blessed from 'blessed';
 import contrib from 'blessed-contrib';
 import { getActiveTunnel } from '../core/tunnel-service.js';
-import { getProxiedIp } from '../net/ip-check.js';
+import { getProxiedIp, getPublicIp } from '../net/ip-check.js';
 import fetch from 'node-fetch';
 import { spawnSync } from 'child_process';
 import os from 'os';
@@ -67,8 +67,12 @@ const formatBytes = (bytes) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-const getWgStats = () => {
-  const dumpRes = spawnSync('sudo', ['wg', 'show', 'all', 'dump'], { encoding: 'utf-8' });
+const getWgStats = (isAwg = false) => {
+  const cmd = isAwg ? 'awg' : 'wg';
+  let dumpRes = spawnSync('sudo', [cmd, 'show', 'all', 'dump'], { encoding: 'utf-8' });
+  if (dumpRes.status !== 0 && isAwg) {
+    dumpRes = spawnSync('sudo', ['wg', 'show', 'all', 'dump'], { encoding: 'utf-8' });
+  }
   if (dumpRes.status !== 0) return null;
   const lines = dumpRes.stdout.trim().split('\n');
   if (lines.length <= 1) return null;
@@ -201,7 +205,8 @@ export default async () => {
     if (!geoFetched) {
       geoFetched = true;
       try {
-        currentIp = await getProxiedIp(info.port);
+        const isSystemWide = info.mode === 'wireguard' || info.mode === 'amneziawg';
+        currentIp = isSystemWide ? await getPublicIp() : await getProxiedIp(info.port);
         geoData = await getGeoIp(currentIp);
         if (geoData) {
           mapWidget.addMarker({ lat: geoData.lat, lon: geoData.lon, color: 'red', char: 'X' });
@@ -227,7 +232,7 @@ export default async () => {
 
     // 4. Update WG Stats & Chart
     if (info.mode === 'wireguard' || info.mode === 'amneziawg' || info.mode === 'auto') {
-      const stats = getWgStats();
+      const stats = getWgStats(info.mode === 'amneziawg');
       if (stats) {
         if (!hasInitWg) {
           prevRx = stats.totalRx;

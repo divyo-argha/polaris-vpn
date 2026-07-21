@@ -49,7 +49,7 @@ export default async (options) => {
   const isJson = options.json;
   const info = getActiveTunnel();
 
-  if (!info || info.mode !== 'wireguard') {
+  if (!info || (info.mode !== 'wireguard' && info.mode !== 'amneziawg')) {
     if (isJson) {
       console.log(JSON.stringify({ error: 'WireGuard tunnel is not active' }));
     } else {

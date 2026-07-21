@@ -87,8 +87,12 @@ const fmtBytes = (n) => {
   return `${(n / Math.pow(k, i)).toFixed(1)} ${s[i]}`;
 };
 
-const wgStats = () => {
-  const r = spawnSync('sudo', ['wg', 'show', 'all', 'dump'], { encoding: 'utf-8' });
+const wgStats = (isAwg = false) => {
+  const cmd = isAwg ? 'awg' : 'wg';
+  let r = spawnSync('sudo', [cmd, 'show', 'all', 'dump'], { encoding: 'utf-8' });
+  if (r.status !== 0 && isAwg) {
+    r = spawnSync('sudo', ['wg', 'show', 'all', 'dump'], { encoding: 'utf-8' });
+  }
   if (r.status !== 0) return null;
   const lines = r.stdout.trim().split('\n');
   if (lines.length <= 1) return null;
@@ -293,7 +297,7 @@ export default async () => {
     if (info) {
       const upMin = Math.floor((Date.now() - new Date(info.startTime).getTime()) / 60000);
       const ping  = pingServer(info.server.split('@').pop());
-      const wg    = wgStats();
+      const wg    = wgStats(info.mode === 'amneziawg');
       L.push(`${t(D.accent, b('◈  Tunnel Status'))}    ${t(D.success, '⬤  ACTIVE')}`);
       L.push(hr()); L.push('');
       L.push(`  ${mu('Server  ')}  ${b(info.server)}`);
@@ -391,7 +395,13 @@ export default async () => {
   const renderPeers = () => {
     const L = [];
     L.push(`${t(D.accent, b('≡  WireGuard Peers'))}`); L.push(hr()); L.push('');
-    const r = spawnSync('sudo', ['wg', 'show', 'all', 'dump'], { encoding: 'utf-8' });
+    const info = getActiveTunnel();
+    const isAwg = info && info.mode === 'amneziawg';
+    const cmd = isAwg ? 'awg' : 'wg';
+    let r = spawnSync('sudo', [cmd, 'show', 'all', 'dump'], { encoding: 'utf-8' });
+    if (r.status !== 0 && isAwg) {
+      r = spawnSync('sudo', ['wg', 'show', 'all', 'dump'], { encoding: 'utf-8' });
+    }
     if (r.status !== 0 || !r.stdout.trim()) {
       L.push(`  ${t(D.warning, '⚠')}  No WireGuard interface found.`);
       L.push(`  ${mu('Start a WireGuard tunnel first.')}`);

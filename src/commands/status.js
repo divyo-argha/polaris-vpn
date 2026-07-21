@@ -1,5 +1,5 @@
 import { getActiveTunnel } from '../core/tunnel-service.js';
-import { getProxiedIp } from '../net/ip-check.js';
+import { getProxiedIp, getPublicIp } from '../net/ip-check.js';
 import { createTable, createSpinner, printError } from '../utils/display.js';
 import chalk from 'chalk';
 import fetch from 'node-fetch';
@@ -41,8 +41,12 @@ const formatBytes = (bytes) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-const getWgStats = () => {
-  const dumpRes = spawnSync('sudo', ['wg', 'show', 'all', 'dump'], { encoding: 'utf-8' });
+const getWgStats = (isAwg = false) => {
+  const cmd = isAwg ? 'awg' : 'wg';
+  let dumpRes = spawnSync('sudo', [cmd, 'show', 'all', 'dump'], { encoding: 'utf-8' });
+  if (dumpRes.status !== 0 && isAwg) {
+    dumpRes = spawnSync('sudo', ['wg', 'show', 'all', 'dump'], { encoding: 'utf-8' });
+  }
   if (dumpRes.status !== 0) return null;
   const lines = dumpRes.stdout.trim().split('\n');
   if (lines.length <= 1) return null;
@@ -72,10 +76,11 @@ export default async (options) => {
   }
   
   let currentIp = 'Unknown';
-  const spinner = isJson ? null : createSpinner('Checking proxy status...').start();
+  const isSystemWide = info.mode === 'wireguard' || info.mode === 'amneziawg';
+  const spinner = isJson ? null : createSpinner(isSystemWide ? 'Checking public IP...' : 'Checking proxy status...').start();
   
   try {
-    currentIp = await getProxiedIp(info.port);
+    currentIp = isSystemWide ? await getPublicIp() : await getProxiedIp(info.port);
     if (spinner) spinner.stop();
     
     let geo = 'N/A';
@@ -92,8 +97,8 @@ export default async (options) => {
       latency = pingServer(serverIp);
       geo = await getGeoIp(currentIp);
 
-      if (info.mode === 'wireguard') {
-        const stats = getWgStats();
+      if (isSystemWide) {
+        const stats = getWgStats(info.mode === 'amneziawg');
         if (stats) {
           dataUsage = `${formatBytes(stats.totalRx)} / ${formatBytes(stats.totalTx)}`;
         }
@@ -128,8 +133,16 @@ export default async (options) => {
       table.push(
         ['Status', chalk.green('Connected')],
         ['Mode', (info.mode || 'ssh').toUpperCase()],
-        ['Server', info.server],
-        ['Proxy', `socks5://127.0.0.1:${info.port}`],
+        ['Server', info.server]
+      );
+
+      if (isSystemWide) {
+        table.push(['Connection', chalk.cyan('System-wide (All OS traffic)')]);
+      } else {
+        table.push(['Proxy', `socks5://127.0.0.1:${info.port}`]);
+      }
+
+      table.push(
         ['Current IP', chalk.cyan(currentIp)],
         ['Uptime', `${uptimeMin} minutes`],
         ['PID', info.pid.toString()]

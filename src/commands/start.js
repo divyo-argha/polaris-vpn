@@ -51,8 +51,7 @@ export default async (options) => {
   const requestedMode = options.mode || 'auto';
 
   if (!server) {
-    const active = config.get('activeProfile');
-    const profiles = config.get('profiles') || {};
+    const { profiles, active } = getProfiles();
     
     if (active && profiles[active]) {
       server = profiles[active];

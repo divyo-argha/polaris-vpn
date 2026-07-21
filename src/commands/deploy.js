@@ -36,7 +36,8 @@ export default async (options) => {
     }
 
     // Automatically trigger local connection
-    await startCommand({ mode: 'wireguard', json: isJson });
+    const mode = options.mode || 'wireguard';
+    await startCommand({ server, mode, json: isJson });
 
   } catch (err) {
     if (spinner) spinner.fail('Deployment failed');

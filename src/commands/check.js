@@ -22,12 +22,13 @@ export default async (options) => {
     if (spinner) spinner.text = 'Checking IP address...';
     if (info) {
       try {
-        const tunnelIp = await getProxiedIp(info.port);
+        const isSystemWide = info.mode === 'wireguard' || info.mode === 'amneziawg';
+        const tunnelIp = isSystemWide ? await getPublicIp() : await getProxiedIp(info.port);
         results.ip = true;
         details.ip = `Tunnel active (${(info.mode || 'ssh').toUpperCase()}): ${tunnelIp}`;
       } catch (e) {
         results.ip = false;
-        details.ip = `Tunnel process running but proxy failed: ${e.message}`;
+        details.ip = `Tunnel active but IP check failed: ${e.message}`;
       }
     } else {
       const pubIp = await getPublicIp();
