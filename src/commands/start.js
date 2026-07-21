@@ -11,6 +11,7 @@ import { getActiveTunnel, startTunnel } from '../core/tunnel-service.js';
 import { startDnsResolver, getDnsStatus } from '../core/dns-service.js';
 import { setSystemDns } from '../net/system-dns.js';
 import { applyBypassRules } from '../utils/bypass.js';
+import { benchmarkAllProfiles } from '../core/benchmark-service.js';
 import { CONFIG_DIR } from '../utils/config.js';
 
 const WG_CONF = path.join(CONFIG_DIR, 'wg', 'wg0.conf');
@@ -53,7 +54,17 @@ export default async (options) => {
   const port = parseInt(options.port || '1080', 10);
   const requestedMode = options.mode || 'auto';
 
-  if (!server) {
+  if (options.fastest) {
+    if (!isJson) printInfo('Benchmarking saved profiles to select the fastest server...');
+    const ranked = await benchmarkAllProfiles();
+    if (ranked.length > 0 && ranked[0].score < 9999) {
+      server = ranked[0].server;
+      if (!isJson) printSuccess(`Selected fastest server: '${ranked[0].alias}' (${ranked[0].ping})`);
+    } else if (!server) {
+      handleError('Failed to find a responsive server during benchmark.', null, isJson);
+      return;
+    }
+  } else if (!server) {
     const { profiles, active } = getProfiles();
     
     if (active && profiles[active]) {

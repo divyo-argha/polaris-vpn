@@ -47,10 +47,25 @@ program
   .option('-p, --port <number>', 'Local SOCKS5 port to bind', '1080')
   .option('-m, --mode <type>', 'Tunnel mode: ssh, tls, wireguard, amneziawg or auto', 'auto')
   .option('--no-doh', 'Disable automatic DoH system DNS protection')
+  .option('--fastest', 'Auto-select lowest latency server profile')
+  .option('--failover', 'Enable automatic multi-protocol fallback')
   .action(async (options, cmd) => {
     if (!cmd.optsWithGlobals().json) printBanner();
     try {
       const run = (await import('./commands/start.js')).default;
+      await run(cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
+program
+  .command('benchmark')
+  .description('Ping and measure latency across all saved server profiles')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const run = (await import('./commands/benchmark.js')).default;
       await run(cmd.optsWithGlobals());
     } catch (err) {
       handleError('Command failed', err, cmd.optsWithGlobals().json);
