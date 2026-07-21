@@ -349,6 +349,34 @@ bypassCmd
     }
   });
 
+program
+  .command('import <file>')
+  .description('Import a WireGuard or AmneziaWG configuration file (.conf)')
+  .option('-a, --alias <name>', 'Custom alias name for the imported profile')
+  .action(async (file, options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { configImport } = await import('./commands/import-export.js');
+      await configImport(file, cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
+program
+  .command('export <alias>')
+  .description('Export a profile configuration file or render QR code')
+  .option('-o, --out <path>', 'Destination file path to write configuration to')
+  .action(async (alias, options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { configExport } = await import('./commands/import-export.js');
+      await configExport(alias, cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
 const configCmd = program.command('config').description('Configure polaris settings');
 configCmd
   .command('set <key> <value>')

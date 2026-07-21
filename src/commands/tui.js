@@ -542,6 +542,13 @@ export default async () => {
   screen.key(['6'], () => goto('check'));
   screen.key(['7'], () => goto('deploy'));
 
+  screen.key(['b'], async () => {
+    await runCmd(async () => {
+      const run = (await import('./benchmark.js')).default;
+      await run({ json: false });
+    });
+  });
+
   screen.key(['escape', 'backspace'], () => {
     if (currentView !== 'home') goto('home');
   });
