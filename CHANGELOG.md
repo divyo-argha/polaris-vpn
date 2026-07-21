@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-07-22
+
+### Fixed
+
+- **Start Command**: Fixed `ReferenceError: config is not defined` crash when invoking `polaris start` without `--server` argument.
+- **WireGuard & AmneziaWG Status**: Fixed `polaris status` and `polaris check` reporting false proxy failures for system-wide VPN interfaces.
+- **AmneziaWG Bandwidth Monitoring**: Updated `polaris monitor`, `dashboard`, `status`, and TUI components to query `awg` interface statistics and accept `--mode amneziawg`.
+- **Deploy Local Auto-Connect**: Updated `polaris deploy` to automatically trigger local connection passing correct server and mode arguments upon provisioning completion.
+- **Status Table Formatting**: Replaced invalid SOCKS5 proxy port display (`socks5://127.0.0.1:0`) with clear `System-wide (All OS traffic)` label for WireGuard and AmneziaWG connections.
+
 ## [1.0.0] - 2026-07-15
 
 ### Added
