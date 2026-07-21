@@ -51,7 +51,13 @@ Run:
 polaris start
 ```
 
-You should see a success message. All your internet traffic is now encrypted and routed through your VPS!
+*Note: By default, `polaris start` automatically launches local DNS-over-HTTPS (`127.0.0.1:5354`) and binds system DNS to prevent ISP DNS leaks.*
+
+To automatically measure server ping latency and connect to the fastest available profile:
+
+```bash
+polaris start --fastest
+```
 
 To verify everything is working and your IP has changed, run:
 
@@ -59,15 +65,42 @@ To verify everything is working and your IP has changed, run:
 polaris check
 ```
 
-## 5. Enable the Kill Switch (Optional)
+## 5. Enable Split Tunneling / Bypass Rules (Optional)
 
-To ensure your real IP is never leaked if the VPN connection drops, enable the system kill switch:
+Want local LAN devices or specific streaming sites to bypass the VPN?
 
 ```bash
-polaris killswitch on
+# Add domain or IP subnet to bypass rules
+polaris bypass add netflix.com
+polaris bypass add 192.168.1.0/24
+
+# View active bypass rules
+polaris bypass list
 ```
 
-## 6. Connect Mobile Devices
+## 6. Measure Server Latency (`polaris benchmark`)
+
+If you have multiple saved profiles, rank them by ICMP ping and TCP handshake latency:
+
+```bash
+polaris benchmark
+```
+
+## 7. Import & Export Configuration Files
+
+Import third-party WireGuard / AmneziaWG `.conf` files (from providers like Mullvad, ProtonVPN, or custom servers):
+
+```bash
+polaris import ~/Downloads/mullvad-us.conf --alias mullvad-us
+```
+
+Export any saved profile to a `.conf` file or display a terminal QR code:
+
+```bash
+polaris export mullvad-us --out ./mullvad-us.conf
+```
+
+## 8. Connect Mobile Devices
 
 Want to use the VPN on your phone? Polaris can generate terminal QR codes!
 First, generate a new peer configuration on the server:
@@ -84,10 +117,12 @@ polaris peer qr my-iphone
 
 Download the **AmneziaWG** app on iOS or Android, tap the `+` button, select **Create from QR code**, and scan your screen!
 
-## 7. Stop the Tunnel
+## 9. Stop the Tunnel
 
 When you are done, simply run:
 
 ```bash
 polaris stop
 ```
+
+*(This automatically stops the tunnel, turns off Auto-DoH, and restores your original system DNS settings)*
