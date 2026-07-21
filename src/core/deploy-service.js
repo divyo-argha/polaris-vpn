@@ -72,7 +72,7 @@ export const deployServer = async (serverStr, options = {}) => {
         onProgress(`Installing ${isAwg ? 'AmneziaWG' : 'WireGuard'}, UFW, Unbound, and Fail2Ban...`);
         let installCmd = 'sudo apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard ufw unbound fail2ban';
         if (isAwg) {
-          installCmd = 'sudo apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common && sudo add-apt-repository -y ppa:amnezia/ppa && sudo apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y amneziawg-dkms amneziawg-tools ufw unbound fail2ban';
+          installCmd = 'sudo apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common linux-headers-$(uname -r) || true && sudo add-apt-repository -y ppa:amnezia/ppa && sudo apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y amneziawg-dkms amneziawg-tools ufw unbound fail2ban';
         }
         let res = await sshExec(conn, installCmd);
         if (res.code !== 0) throw new Error(`Installation failed: ${res.stderr}`);

@@ -31,7 +31,7 @@ export default async (options) => {
     if (isJson) {
       console.log(JSON.stringify({ success: true, ...res }));
     } else {
-      printBox('Server Provisioned Successfully 🚀', `Remote Server: ${server}\nLocal Config: ${res.clientConfPath}\nClient PK: ${res.clientPublicKey}\nServer PK: ${res.serverPublicKey}`, 'success');
+      printBox('Server Provisioned Successfully 🚀', `Remote Server: ${server}\nLocal Config: ${res.clientConfPath}\nClient PK: ${res.clientPublicKey}\nServer PK: ${res.serverPublicKey}\n\n💡 Oracle Cloud / Cloud Provider Tip:\nEnsure UDP Port 51820 is opened in your Cloud Console (VCN Ingress Rules)!`, 'success');
       console.log(chalk.cyan('\nStarting WireGuard tunnel connection locally...\n'));
     }
 
