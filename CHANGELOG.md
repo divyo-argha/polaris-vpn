@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-07-22
+
+### Added
+
+- **Auto-DoH System DNS Protection**: `polaris start` automatically launches the local DoH resolver (`127.0.0.1:5354`) and binds system DNS on macOS and Linux to eliminate ISP DNS leaks. System DNS is safely backed up and restored on `polaris stop`.
+- **Split Tunneling / Bypass Rules (`polaris bypass`)**: Added `polaris bypass add/remove/list <domain|ip>` commands to route local LAN devices or specific streaming domains outside the VPN.
+- **Server Latency Benchmark (`polaris benchmark`)**: Added `polaris benchmark` command to rank all saved profiles by ICMP ping latency and TCP handshake times.
+- **Fastest Server Auto-Selection (`polaris start --fastest`)**: Added `--fastest` flag to benchmark saved profiles and auto-connect to the lowest-latency server.
+- **Multi-Protocol Automatic Failover (`polaris start --failover`)**: Automatically falls back through protocols (`wireguard` → `amneziawg` → `tls` → `ssh`) if primary connection fails.
+- **WireGuard / AmneziaWG Config Import (`polaris import`)**: Import third-party `.conf` files (`polaris import <file>`) from providers like Mullvad, ProtonVPN, or custom servers.
+- **Profile Export & Mobile QR Codes (`polaris export`)**: Export saved profiles to `.conf` files (`polaris export <alias> --out <path>`) or render terminal QR codes for mobile setup.
+- **TUI Shortcut Keys**: Added `b` shortcut key in master TUI to view live server latency benchmark rankings.
+
 ## [1.1.2] - 2026-07-22
 
 ### Fixed
