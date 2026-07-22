@@ -34,18 +34,25 @@ export const startDnsServerInstance = (port = 5354, upstream = 'https://cloudfla
     handle: async (request, send) => {
       const response = Packet.createResponseFromRequest(request);
       
-      for (const question of request.questions) {
+      for (const question of (request.questions || [])) {
         try {
           const dohRes = await resolveViaDoh(question.name, question.type, upstream);
-          if (dohRes.Answer) {
+          if (dohRes && dohRes.Answer) {
             for (const ans of dohRes.Answer) {
-              response.answers.push({
+              const answerObj = {
                 name: ans.name,
                 type: ans.type,
                 class: Packet.CLASS.IN,
                 ttl: ans.TTL || 300,
-                address: ans.data
-              });
+              };
+              if (ans.type === 1 || ans.type === 28) {
+                answerObj.address = ans.data;
+              } else if (ans.type === 5 || ans.type === 12 || ans.type === 2) {
+                answerObj.domain = ans.data;
+              } else {
+                answerObj.data = ans.data;
+              }
+              response.answers.push(answerObj);
             }
           }
         } catch (err) {
