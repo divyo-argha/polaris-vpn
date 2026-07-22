@@ -462,12 +462,28 @@ export default async () => {
     [['1','Home'],['2','Servers'],['3','Quick Connect'],
      ['4','Live Monitor'],['5','Peers'],['6','Privacy Check'],['7','Deploy VPS']]
       .forEach(([k, v]) => L.push(`  ${t(D.accent, k.padEnd(16))} ${mu(v)}`));
-    setView('help', L, ['?', 'Close'], ['Esc', 'Back']);
+    setView('help', L, ['?', 'Close'], ['Esc / h', 'Main Menu']);
+  };
+
+  // ─── ERROR VIEW RENDERER ──────────────────────────────────────────
+  const renderErrorView = (title, message) => {
+    const L = [];
+    L.push(`${t(D.danger, b(`⚠  ${title}`))}`);
+    L.push(hr());
+    L.push('');
+    L.push(`  ${t(D.danger, '✖')}  ${b(message)}`);
+    L.push('');
+    L.push(hr());
+    L.push('');
+    L.push(`  ${mu('Press ')}${t(D.accent, '[Esc]')}${mu(', ')}${t(D.accent, '[h]')}${mu(' or ')}${t(D.accent, '[1]')}${mu(' to return to the Main Menu.')}`);
+    setView('error', L, ['Esc / h / 1', 'Main Menu']);
   };
 
   // ─── SUSPEND + RUN COMMAND ────────────────────────────────────────
   const runCmd = async (fn) => {
-    screen.destroy();
+    try {
+      screen.destroy();
+    } catch (e) {}
     process.stdout.write('\x1b[2J\x1b[H');
     console.log(`\x1b[36m\n  Polaris VPN \x1b[0m\x1b[90m— running command...\x1b[0m\n`);
     try {
@@ -476,65 +492,98 @@ export default async () => {
       console.error('\n\x1b[31m  Error:\x1b[0m', err.message);
     }
     console.log('\n\x1b[90m  ─────────────────────────────────\x1b[0m');
-    console.log('\x1b[36m  Press any key to return...\x1b[0m');
-    await new Promise(resolve => {
-      process.stdin.setRawMode(true);
-      process.stdin.resume();
-      process.stdin.once('data', () => {
-        process.stdin.setRawMode(false);
-        process.stdin.pause();
-        resolve();
+    console.log('\x1b[36m  Press any key to return to main menu...\x1b[0m');
+    try {
+      await new Promise(resolve => {
+        if (process.stdin.isTTY) {
+          process.stdin.setRawMode(true);
+          process.stdin.resume();
+          const onData = () => {
+            try {
+              process.stdin.removeListener('data', onData);
+              process.stdin.setRawMode(false);
+              process.stdin.pause();
+            } catch (e) {}
+            resolve();
+          };
+          process.stdin.on('data', onData);
+        } else {
+          resolve();
+        }
       });
-    });
-    const m = await import('./tui.js');
-    await m.default();
+    } catch (e) {}
+    try {
+      const m = await import('./tui.js');
+      await m.default();
+    } catch (err) {
+      console.error('Failed to restore TUI:', err.message);
+      process.exit(1);
+    }
   };
 
   // ─── ACTIVATE A VIEW ──────────────────────────────────────────────
   const goto = async (viewId) => {
-    currentView = viewId;
+    try {
+      currentView = viewId;
 
-    // Sync sidebar highlight
-    const vi = VIEWS.findIndex(v => v && v.id === viewId);
-    const ni = NAV.indexOf(vi);
-    if (ni !== -1) menuIdx = ni;
+      // Sync sidebar highlight
+      const vi = VIEWS.findIndex(v => v && v.id === viewId);
+      const ni = NAV.indexOf(vi);
+      if (ni !== -1) menuIdx = ni;
 
-    renderSidebar();
-    screen.render();
+      renderSidebar();
+      screen.render();
 
-    // Delegated actions
-    if (viewId === 'connect') {
-      await runCmd(async () => {
-        const run = (await import('./start.js')).default;
-        await run({ mode: 'auto', json: false });
-      });
-      return;
+      // Delegated actions
+      if (viewId === 'connect') {
+        await runCmd(async () => {
+          const run = (await import('./start.js')).default;
+          await run({ mode: 'auto', json: false });
+        });
+        return;
+      }
+      if (viewId === 'dashboard') {
+        const { getActiveTunnel } = await import('../core/tunnel-service.js');
+        const info = getActiveTunnel();
+        if (!info) {
+          renderErrorView('Live Monitor Unavailable', 'No active tunnel found. Please connect to a VPN server first before launching the Live Monitor.');
+          screen.render();
+          return;
+        }
+        try {
+          screen.destroy();
+          const m = await import('./dashboard.js');
+          await m.default();
+        } catch (err) {
+          const m = await import('./tui.js');
+          await m.default();
+        }
+        return;
+      }
+      if (viewId === 'quit') { process.exit(0); }
+
+      // Render static content views
+      switch (viewId) {
+        case 'home':       renderHome();       break;
+        case 'servers':    srvIdx = 0; renderServers(); break;
+        case 'check':      renderCheck();      break;
+        case 'deploy':     renderDeploy();     break;
+        case 'peers':      renderPeers();      break;
+        case 'disconnect': renderDisconnect(); break;
+        case 'help':       renderHelp();       break;
+        default:           renderHome();       break;
+      }
+      screen.render();
+    } catch (err) {
+      renderErrorView('Navigation Error', err.message || 'An error occurred while rendering this view.');
+      screen.render();
     }
-    if (viewId === 'dashboard') {
-      screen.destroy();
-      await (await import('./dashboard.js')).default();
-      return;
-    }
-    if (viewId === 'quit') { process.exit(0); }
-
-    // Render static content views
-    switch (viewId) {
-      case 'home':       renderHome();       break;
-      case 'servers':    srvIdx = 0; renderServers(); break;
-      case 'check':      renderCheck();      break;
-      case 'deploy':     renderDeploy();     break;
-      case 'peers':      renderPeers();      break;
-      case 'disconnect': renderDisconnect(); break;
-      case 'help':       renderHelp();       break;
-    }
-    screen.render();
   };
 
   // ─── KEYBOARD: ALL HANDLED HERE, NO BLESSED.LIST FOCUS FIGHTS ────
   screen.key(['q', 'C-c'], () => process.exit(0));
   screen.key(['?'], () => goto(currentView === 'help' ? 'home' : 'help'));
-  screen.key(['h'], () => goto('home'));
-  screen.key(['1'], () => goto('home'));
+  screen.key(['h', 'm', '1'], () => goto('home'));
   screen.key(['2'], () => goto('servers'));
   screen.key(['3'], () => goto('connect'));
   screen.key(['4'], () => goto('dashboard'));
@@ -644,26 +693,31 @@ export default async () => {
 
   // ─── RESIZE ───────────────────────────────────────────────────────
   screen.on('resize', () => {
-    screen.realloc();
-    renderSidebar();
-    switch (currentView) {
-      case 'home':       renderHome();       break;
-      case 'servers':    renderServers();    break;
-      case 'check':      renderCheck();      break;
-      case 'deploy':     renderDeploy();     break;
-      case 'peers':      renderPeers();      break;
-      case 'disconnect': renderDisconnect(); break;
-      case 'help':       renderHelp();       break;
-    }
-    screen.render();
+    try {
+      screen.realloc();
+      renderSidebar();
+      switch (currentView) {
+        case 'home':       renderHome();       break;
+        case 'servers':    renderServers();    break;
+        case 'check':      renderCheck();      break;
+        case 'deploy':     renderDeploy();     break;
+        case 'peers':      renderPeers();      break;
+        case 'disconnect': renderDisconnect(); break;
+        case 'help':       renderHelp();       break;
+        default:           renderHome();       break;
+      }
+      screen.render();
+    } catch (e) {}
   });
 
   // ─── AUTO-REFRESH STATUS ──────────────────────────────────────────
   setInterval(() => {
-    renderSidebar();
-    if (currentView === 'home')  renderHome();
-    if (currentView === 'peers') renderPeers();
-    screen.render();
+    try {
+      renderSidebar();
+      if (currentView === 'home')  renderHome();
+      if (currentView === 'peers') renderPeers();
+      screen.render();
+    } catch (e) {}
   }, 5000);
 
   // ─── INIT ─────────────────────────────────────────────────────────

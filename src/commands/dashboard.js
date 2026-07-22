@@ -102,6 +102,28 @@ export default async () => {
   
   if (!info) {
     console.error('Tunnel is down. Start the tunnel first to use the dashboard.');
+    console.log('\x1b[36mPress any key (or Esc/h) to open the Polaris TUI main menu, or Ctrl+C to exit...\x1b[0m');
+    try {
+      await new Promise(resolve => {
+        if (process.stdin.isTTY) {
+          process.stdin.setRawMode(true);
+          process.stdin.resume();
+          const onData = () => {
+            try {
+              process.stdin.removeListener('data', onData);
+              process.stdin.setRawMode(false);
+              process.stdin.pause();
+            } catch (e) {}
+            resolve();
+          };
+          process.stdin.on('data', onData);
+        } else {
+          resolve();
+        }
+      });
+      const m = await import('./tui.js');
+      await m.default();
+    } catch (e) {}
     return;
   }
 
@@ -156,7 +178,7 @@ export default async () => {
 
   // 5. Hotkeys Legend
   grid.set(11, 7, 1, 5, blessed.box, {
-    content: `  ${t(D.accent, b('[↑/↓]'))} ${t(D.muted, 'Scroll')}   ${t(D.accent, b('[Esc/q]'))} ${t(D.muted, 'Back to Home')}`,
+    content: `  ${t(D.accent, b('[↑/↓]'))} ${t(D.muted, 'Scroll')}   ${t(D.accent, b('[Esc/h/m/q]'))} ${t(D.muted, 'Back to Home')}`,
     tags: true,
     style: { bg: D.bg, fg: D.text }
   });
@@ -186,20 +208,27 @@ export default async () => {
   const exitDashboard = async () => {
     if (isClosing) return;
     isClosing = true;
-    screen.destroy();
+    try {
+      screen.destroy();
+    } catch (e) {}
     
     // Re-import and launch the master TUI
-    const m = await import('./tui.js');
-    await m.default();
+    try {
+      const m = await import('./tui.js');
+      await m.default();
+    } catch (e) {
+      process.exit(0);
+    }
   };
 
-  screen.key(['escape', 'q', 'C-c', 'h'], exitDashboard);
+  screen.key(['escape', 'q', 'C-c', 'h', 'm', '1', 'backspace'], exitDashboard);
 
   peersTable.focus();
 
   // ─── UPDATER ────────────────────────────────────────────────────────────
   const updateDashboard = async () => {
     if (isClosing) return;
+    try {
 
     // 1. Fetch IP & GeoIP (runs once)
     if (!geoFetched) {
@@ -269,6 +298,7 @@ export default async () => {
     }
 
     screen.render();
+    } catch (err) {}
   };
 
   const timer = setInterval(updateDashboard, 1000);
