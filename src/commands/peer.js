@@ -1,6 +1,6 @@
 import fs from 'fs';
 import chalk from 'chalk';
-import qrcode from 'qrcode-terminal';
+import QRCode from 'qrcode';
 import { createSpinner, printBox, printInfo, createTable } from '../utils/display.js';
 import { addPeer, listPeers, removePeer, getLocalPeerConfPath } from '../core/peer-service.js';
 import { handleError } from '../utils/error-handler.js';
@@ -20,7 +20,8 @@ export const peerAdd = async (name, options) => {
       console.log(chalk.cyan('Scan this QR code with the WireGuard app on your mobile device:\n'));
       
       const confString = fs.readFileSync(res.confPath, 'utf-8');
-      qrcode.generate(confString, { small: true });
+      const qr = await QRCode.toString(confString, { type: 'terminal', small: true });
+      console.log(qr);
     }
   } catch (err) {
     if (spinner) spinner.fail('Failed to add peer');
@@ -92,7 +93,8 @@ export const peerQr = async (name, options) => {
       console.log(JSON.stringify({ success: true, config: confString }));
     } else {
       console.log(chalk.cyan(`\nQR code for peer configuration '${name}':\n`));
-      qrcode.generate(confString, { small: true });
+      const qr = await QRCode.toString(confString, { type: 'terminal', small: true });
+      console.log(qr);
     }
   } catch (err) {
     handleError('Failed to retrieve QR code', err, isJson);

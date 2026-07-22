@@ -1,6 +1,6 @@
 import fs from 'fs';
 import chalk from 'chalk';
-import qrcode from 'qrcode-terminal';
+import QRCode from 'qrcode';
 import { printSuccess, printError, printBox } from '../utils/display.js';
 import { importWgConfig, exportWgConfig } from '../core/config-export-service.js';
 
@@ -50,7 +50,8 @@ export const configExport = async (alias, options) => {
       console.log(chalk.cyan(`\nConfiguration Profile '${alias}':\n`));
       console.log(confContent);
       console.log(chalk.cyan('\nScan this QR code with the WireGuard app on your mobile device:\n'));
-      qrcode.generate(confContent, { small: true });
+      const qr = await QRCode.toString(confContent, { type: 'terminal', small: true });
+      console.log(qr);
     }
   } catch (err) {
     if (isJson) {
