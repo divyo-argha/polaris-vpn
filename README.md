@@ -116,7 +116,7 @@ polaris
 
 <pre>
 +-----------------------------------------------------------------------------+
-|  POLARIS VPN  v1.2.2                       Command your digital privacy.    |
+|  POLARIS VPN  v1.2.3                       Command your digital privacy.    |
 +--------------------------+--------------------------------------------------+
 | (o) Home                 | (o) Tunnel Status    [*] ACTIVE                  |
 | (s) Servers              | ------------------------------------------------ |
