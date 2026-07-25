@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-07-25
+
+### Added
+
+- **IPv6 Kill-Switch Enforcement**: `polaris killswitch on` now blocks all IPv6 OUTPUT traffic (not just IPv4) via `ip6tables` on Linux and `block drop inet6 all` in pf rules on macOS, eliminating the IPv6 VPN leak vector entirely.
+- **Automatic WireGuard Key Rotation (`polaris rotate`)**: New command generates a fresh Curve25519 keypair, SSHes into the deployed server, replaces the peer's `PublicKey` in the WireGuard config, restarts the service, and writes a new local `.conf`. `polaris rotate --schedule 30` sets an automatic rotation interval; `polaris start` will notify when rotation is due.
+- **Structured Event Log (`polaris logs`)**: All tunnel lifecycle events (CONNECT, DISCONNECT, DNS_START, DNS_STOP, KEY_ROTATE, ERROR) are now persisted as newline-delimited JSON to `~/.config/polaris/events.log`. `polaris logs` renders a color-coded table of the last 50 events. `polaris logs --tail` streams live output with `fs.watch`.
+- **Profile Tagging & Group Start (`polaris tag`)**: Server profiles now support tags (e.g. `streaming`, `work`, `eu`). Use `polaris add <alias> --tag streaming` or `polaris tag <alias> streaming` to annotate profiles. `polaris start --tag streaming` benchmarks all tagged servers and auto-connects to the lowest-latency one.
+- **Remote Server Updater (`polaris update-server`)**: SSHes into the deployed VPS and runs `apt-get upgrade` for WireGuard, AmneziaWG, Unbound, and Fail2Ban packages. No arguments needed if a server was previously deployed — reads `deploy.json` automatically. Supports `--server` and `--identity` overrides.
+- **Homebrew Formula**: Added `docs/polaris-vpn.rb` — a valid Homebrew formula for macOS installation via `brew tap Divyo/tap && brew install polaris-vpn` (requires publishing to a `homebrew-tap` repo).
+- **Expanded Test Suite**: Added 3 new test files (`logger.test.js`, `rotation.test.js`, `dns.test.js`) and extended `commands.test.js` and `benchmark.test.js` with tag-aware profile tests, rotation schedule tests, and TCP handshake timeout wall-clock verification.
+
 ## [1.2.3] - 2026-07-22
 
 ### Fixed & Improved

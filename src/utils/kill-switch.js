@@ -2,6 +2,7 @@ import { execSync, spawnSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { store } from './config.js';
 
 const TMP_PF_CONF = path.join(os.tmpdir(), 'polaris-killswitch.conf');
 const DEFAULT_PF_CONF = '/etc/pf.conf';
@@ -27,21 +28,31 @@ export const enableKillSwitch = (serverIp) => {
       execSync('sudo iptables -C OUTPUT -d 172.16.0.0/12 -j ACCEPT || sudo iptables -A OUTPUT -d 172.16.0.0/12 -j ACCEPT', { stdio: 'ignore' });
       execSync('sudo iptables -C OUTPUT -d 192.168.0.0/16 -j ACCEPT || sudo iptables -A OUTPUT -d 192.168.0.0/16 -j ACCEPT', { stdio: 'ignore' });
       
+      // IPv6 Loopback/Local
+      execSync('sudo ip6tables -C OUTPUT -o lo -j ACCEPT || sudo ip6tables -A OUTPUT -o lo -j ACCEPT', { stdio: 'ignore' });
+      execSync('sudo ip6tables -C OUTPUT -d ::1/128 -j ACCEPT || sudo ip6tables -A OUTPUT -d ::1/128 -j ACCEPT', { stdio: 'ignore' });
+      execSync('sudo ip6tables -C OUTPUT -d fe80::/10 -j ACCEPT || sudo ip6tables -A OUTPUT -d fe80::/10 -j ACCEPT', { stdio: 'ignore' });
+
       // 2. WireGuard interface (default wg0, awg0)
       execSync('sudo iptables -C OUTPUT -o wg0 -j ACCEPT || sudo iptables -A OUTPUT -o wg0 -j ACCEPT', { stdio: 'ignore' });
       execSync('sudo iptables -C OUTPUT -o awg0 -j ACCEPT || sudo iptables -A OUTPUT -o awg0 -j ACCEPT', { stdio: 'ignore' });
+      execSync('sudo ip6tables -C OUTPUT -o wg0 -j ACCEPT || sudo ip6tables -A OUTPUT -o wg0 -j ACCEPT', { stdio: 'ignore' });
+      execSync('sudo ip6tables -C OUTPUT -o awg0 -j ACCEPT || sudo ip6tables -A OUTPUT -o awg0 -j ACCEPT', { stdio: 'ignore' });
       
       // 3. Connect to the VPS server
       execSync(`sudo iptables -C OUTPUT -d ${hostIp} -j ACCEPT || sudo iptables -A OUTPUT -d ${hostIp} -j ACCEPT`, { stdio: 'ignore' });
+      execSync(`sudo ip6tables -C OUTPUT -d ${hostIp} -j ACCEPT || sudo ip6tables -A OUTPUT -d ${hostIp} -j ACCEPT`, { stdio: 'ignore' });
       
       // 4. Drop other outbound connections
       execSync('sudo iptables -C OUTPUT -j REJECT || sudo iptables -A OUTPUT -j REJECT', { stdio: 'ignore' });
+      execSync('sudo ip6tables -C OUTPUT -j REJECT || sudo ip6tables -A OUTPUT -j REJECT', { stdio: 'ignore' });
     
     } else if (platform === 'darwin') {
       // macOS Packet Filter (PF) setup
       const pfRules = `
 # Polaris VPN Smart Kill-Switch
 block drop all
+block drop inet6 all
 pass on lo0
 
 # Allow local LAN traffic
@@ -75,13 +86,22 @@ export const disableKillSwitch = (serverIp) => {
   try {
     if (platform === 'linux') {
       execSync('sudo iptables -D OUTPUT -j REJECT', { stdio: 'ignore' });
-      if (hostIp) execSync(`sudo iptables -D OUTPUT -d ${hostIp} -j ACCEPT`, { stdio: 'ignore' });
+      execSync('sudo ip6tables -D OUTPUT -j REJECT', { stdio: 'ignore' });
+      if (hostIp) {
+          execSync(`sudo iptables -D OUTPUT -d ${hostIp} -j ACCEPT`, { stdio: 'ignore' });
+          execSync(`sudo ip6tables -D OUTPUT -d ${hostIp} -j ACCEPT`, { stdio: 'ignore' });
+      }
       execSync('sudo iptables -D OUTPUT -o wg0 -j ACCEPT', { stdio: 'ignore' });
       execSync('sudo iptables -D OUTPUT -o awg0 -j ACCEPT', { stdio: 'ignore' });
+      execSync('sudo ip6tables -D OUTPUT -o wg0 -j ACCEPT', { stdio: 'ignore' });
+      execSync('sudo ip6tables -D OUTPUT -o awg0 -j ACCEPT', { stdio: 'ignore' });
       execSync('sudo iptables -D OUTPUT -d 192.168.0.0/16 -j ACCEPT', { stdio: 'ignore' });
       execSync('sudo iptables -D OUTPUT -d 172.16.0.0/12 -j ACCEPT', { stdio: 'ignore' });
       execSync('sudo iptables -D OUTPUT -d 10.0.0.0/8 -j ACCEPT', { stdio: 'ignore' });
       execSync('sudo iptables -D OUTPUT -o lo -j ACCEPT', { stdio: 'ignore' });
+      execSync('sudo ip6tables -D OUTPUT -d fe80::/10 -j ACCEPT', { stdio: 'ignore' });
+      execSync('sudo ip6tables -D OUTPUT -d ::1/128 -j ACCEPT', { stdio: 'ignore' });
+      execSync('sudo ip6tables -D OUTPUT -o lo -j ACCEPT', { stdio: 'ignore' });
     
     } else if (platform === 'darwin') {
       // Disable pf (macOS default state)
@@ -100,4 +120,12 @@ export const disableKillSwitch = (serverIp) => {
   } catch (err) {
     // Ignore cleanup errors
   }
+};
+
+export const setKillSwitchConfig = (enabled) => {
+  store.set('killSwitch', Boolean(enabled));
+};
+
+export const getKillSwitchConfig = () => {
+  return store.get('killSwitch', false);
 };

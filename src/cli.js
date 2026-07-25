@@ -49,9 +49,15 @@ program
   .option('--no-doh', 'Disable automatic DoH system DNS protection')
   .option('--fastest', 'Auto-select lowest latency server profile')
   .option('--failover', 'Enable automatic multi-protocol fallback')
+  .option('--tag <tag>', 'Connect to the fastest server matching this tag')
   .action(async (options, cmd) => {
     if (!cmd.optsWithGlobals().json) printBanner();
     try {
+      // Auto-rotate keys if schedule is due
+      const { isRotationDue } = await import('./core/key-rotation-service.js');
+      if (isRotationDue()) {
+        printInfo('Scheduled key rotation is due. Run "polaris rotate" to rotate keys before connecting.');
+      }
       const run = (await import('./commands/start.js')).default;
       await run(cmd.optsWithGlobals());
     } catch (err) {
@@ -125,19 +131,7 @@ program
     }
   });
 
-program
-  .command('add <alias>')
-  .description('Save a server profile for quick access')
-  .requiredOption('-s, --server <user@host>', 'SSH server for this profile')
-  .action(async (alias, options, cmd) => {
-    if (!cmd.optsWithGlobals().json) printBanner();
-    try {
-      const { addServer } = await import('./commands/servers.js');
-      await addServer(alias, cmd.optsWithGlobals());
-    } catch (err) {
-      handleError('Command failed', err, cmd.optsWithGlobals().json);
-    }
-  });
+
 
 program
   .command('list')
@@ -421,6 +415,81 @@ program
   .action(async (options, cmd) => {
     const run = (await import('./commands/monitor.js')).default;
     await run(cmd.optsWithGlobals());
+  });
+
+program
+  .command('logs')
+  .description('View structured event logs (connect, disconnect, errors)')
+  .option('-l, --limit <n>', 'Number of log entries to show', '50')
+  .option('--tail', 'Stream live log output (Ctrl+C to stop)')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const run = (await import('./commands/logs.js')).default;
+      await run(cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
+program
+  .command('rotate')
+  .description('Rotate WireGuard/AmneziaWG cryptographic keys')
+  .option('--schedule <days>', 'Set auto-rotation interval in days (e.g. --schedule 30)')
+  .option('--status', 'Show current rotation schedule and last rotation time')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const run = (await import('./commands/rotate.js')).default;
+      await run(cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
+program
+  .command('tag <alias> <tag>')
+  .description('Add a tag to a saved server profile (use --remove to untag)')
+  .option('--remove', 'Remove the tag instead of adding it')
+  .action(async (alias, tag, options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { tagServer } = await import('./commands/servers.js');
+      await tagServer(alias, tag, cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
+program
+  .command('update-server')
+  .description('Push VPN package updates (wireguard, unbound, fail2ban) to a deployed VPS')
+  .option('-s, --server <user@host>', 'Override the target server (defaults to deployed server)')
+  .option('-i, --identity <path>', 'SSH private key file path')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const run = (await import('./commands/update-server.js')).default;
+      await run(cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
+// Also wire --tag into polaris add
+program
+  .command('add <alias>')
+  .description('Save a server profile for quick access')
+  .requiredOption('-s, --server <user@host>', 'SSH server for this profile')
+  .option('-t, --tag <tag>', 'Tag to associate with this profile (e.g. streaming, work)')
+  .action(async (alias, options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { addServer } = await import('./commands/servers.js');
+      await addServer(alias, cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
   });
 
 if (process.argv.length === 2) {

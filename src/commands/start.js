@@ -6,13 +6,14 @@ import { spawnSync } from 'child_process';
 import { printSuccess, createSpinner, printInfo, promptSelection, printBox } from '../utils/display.js';
 import { handleError } from '../utils/error-handler.js';
 import { getPublicIp, getProxiedIp } from '../net/ip-check.js';
-import { getProfiles } from '../core/profile-service.js';
+import { getProfiles, getProfilesByTag } from '../core/profile-service.js';
 import { getActiveTunnel, startTunnel } from '../core/tunnel-service.js';
 import { startDnsResolver, getDnsStatus } from '../core/dns-service.js';
 import { setSystemDns } from '../net/system-dns.js';
 import { applyBypassRules } from '../utils/bypass.js';
-import { benchmarkAllProfiles } from '../core/benchmark-service.js';
+import { benchmarkAllProfiles, benchmarkServer } from '../core/benchmark-service.js';
 import { CONFIG_DIR } from '../utils/config.js';
+import { logEvent } from '../utils/logger.js';
 
 const WG_CONF = path.join(CONFIG_DIR, 'wg', 'wg0.conf');
 
@@ -54,7 +55,30 @@ export default async (options) => {
   const port = parseInt(options.port || '1080', 10);
   const requestedMode = options.mode || 'auto';
 
-  if (options.fastest) {
+  // --tag: filter profiles by tag and benchmark them for fastest
+  if (options.tag && !server) {
+    if (!isJson) printInfo(`Finding fastest server with tag '${options.tag}'...`);
+    const taggedProfiles = getProfilesByTag(options.tag);
+    if (taggedProfiles.length === 0) {
+      handleError(`No profiles found with tag '${options.tag}'. Use "polaris tag <alias> ${options.tag}" to tag a profile.`, null, isJson);
+      return;
+    }
+    const results = [];
+    for (const p of taggedProfiles) {
+      const res = await benchmarkServer(p.alias, p.server);
+      results.push(res);
+    }
+    results.sort((a, b) => a.score - b.score);
+    if (results.length > 0 && results[0].score < 9999) {
+      server = results[0].server;
+      if (!isJson) printInfo(`Selected '${results[0].alias}' (${results[0].ping}) from tag '${options.tag}'`);
+    } else {
+      handleError(`All servers with tag '${options.tag}' are unreachable.`, null, isJson);
+      return;
+    }
+  }
+
+  if (options.fastest && !server) {
     if (!isJson) printInfo('Benchmarking saved profiles to select the fastest server...');
     const ranked = await benchmarkAllProfiles();
     if (ranked.length > 0 && ranked[0].score < 9999) {
@@ -66,15 +90,22 @@ export default async (options) => {
     }
   } else if (!server) {
     const { profiles, active } = getProfiles();
-    
+
+    // Resolve server string from profile (handles both legacy strings and new {server, tags} objects)
+    const resolveServer = (alias) => {
+      const entry = profiles[alias];
+      if (!entry) return null;
+      return typeof entry === 'string' ? entry : entry.server;
+    };
+
     if (active && profiles[active]) {
-      server = profiles[active];
+      server = resolveServer(active);
     } else {
       if (isJson) {
         handleError('No server specified.', null, isJson);
         return;
       }
-      
+
       const profileNames = Object.keys(profiles);
       if (profileNames.length === 0) {
         handleError('No server specified and no saved profiles found. Use --server <user@host>', null, isJson);
@@ -83,10 +114,10 @@ export default async (options) => {
 
       printInfo('No server specified. Select a saved profile to connect to:');
       const choice = await promptSelection('Select Profile:', profileNames.map(p => ({
-        name: `${p} (${profiles[p]})`,
-        value: profiles[p]
+        name: `${p} (${resolveServer(p)})`,
+        value: resolveServer(p)
       })));
-      
+
       server = choice;
     }
   }
@@ -181,6 +212,7 @@ export default async (options) => {
       } else {
         console.log(JSON.stringify({ success: true, oldIp, newIp, mode: actualMode, pid: res.pid, doh: enableDoh }));
       }
+      logEvent('CONNECT', `Connected to ${server}`, { mode: actualMode, oldIp, newIp });
     } else {
       if (!isJson) {
         spinner.text = 'Verifying IP through proxy...';
@@ -193,10 +225,12 @@ export default async (options) => {
       } else {
         console.log(JSON.stringify({ success: true, oldIp, newIp, proxy: `socks5://127.0.0.1:${port}`, pid: res.pid, mode: actualMode, doh: enableDoh }));
       }
+      logEvent('CONNECT', `Connected to ${server}`, { mode: actualMode, oldIp, newIp, proxy: `socks5://127.0.0.1:${port}` });
     }
 
   } catch (err) {
     if (!isJson && spinner) spinner.stop();
+    logEvent('ERROR', `Failed to connect to ${server}: ${err.message}`, { mode: requestedMode });
     handleError('Failed to start tunnel', err, isJson);
   }
 };

@@ -2,6 +2,7 @@ import { stopActiveTunnel } from '../core/tunnel-service.js';
 import { stopDnsResolver } from '../core/dns-service.js';
 import { restoreSystemDns } from '../net/system-dns.js';
 import { printSuccess, printInfo, printError } from '../utils/display.js';
+import { logEvent } from '../utils/logger.js';
 
 export default async (options) => {
   const isJson = options.json;
@@ -21,7 +22,9 @@ export default async (options) => {
       }
       return;
     }
-    
+
+    logEvent('DISCONNECT', `Disconnected from ${info.server}`, { mode: info.mode });
+
     if (isJson) {
       console.log(JSON.stringify({ success: true, message: 'Tunnel stopped successfully.' }));
     } else {
