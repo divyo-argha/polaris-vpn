@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.3] - 2026-07-22
+
+### Fixed & Improved
+
+- **Standalone REST API Daemon (`polaris-server`)**: Added shebang and direct CLI execution parser to `src/commands/server.js` so `polaris-server` can be executed directly as a standalone process with `-p/--port` and `--json` support.
+- **DoH Resolver Record Mapping**: Enhanced local DNS-over-HTTPS resolver in `src/net/dns-resolver.js` to correctly map `CNAME`, `PTR`, `NS`, `TXT`, and `MX` records using `dns2` domain formatting, with added null-safety checks.
+
+## [1.2.2] - 2026-07-22
+
+### Security & Fixed
+
+- **TUI Accessibility & Recovery**: Added `renderErrorView` in-app error boundary and emergency navigation shortcuts (`[Esc]`, `[h]`, `[m]`, `[1]`) so TUI view failures or offline states never trap the user or crash the process.
+- **Dependency Security Cleanup**: Replaced unmaintained `qrcode-terminal` with modern, actively maintained `qrcode` library to eliminate supply chain risks.
+- **Vulnerability Patches**: Updated `fast-uri` dependency to resolve host confusion vulnerabilities (`GHSA-v2hh-gcrm-f6hx` / `GHSA-4c8g-83qw-93j6`), bringing `npm audit` to 0 vulnerabilities.
+
+## [1.2.1] - 2026-07-22
+
+### Security & Fixed
+
+- **Dependency Security Cleanup**: Replaced unmaintained `qrcode-terminal` with modern, actively maintained `qrcode` library to eliminate supply chain risks.
+- **Vulnerability Patches**: Updated `fast-uri` dependency to resolve host confusion vulnerabilities (`GHSA-v2hh-gcrm-f6hx` / `GHSA-4c8g-83qw-93j6`), bringing `npm audit` to 0 vulnerabilities.
+
 ## [1.2.0] - 2026-07-22
 
 ### Added
