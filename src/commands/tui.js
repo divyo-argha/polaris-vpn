@@ -321,17 +321,23 @@ export default async () => {
         L.push(`  ${t(D.accent, b('Saved Profiles'))}`); L.push('');
         names.forEach((n, i) => {
           const act = n === active;
+          // Support both legacy plain-string and new { server, tags } profile shapes
+          const srv = typeof profiles[n] === 'string' ? profiles[n] : (profiles[n].server || '?');
+          const tags = Array.isArray(profiles[n].tags) && profiles[n].tags.length > 0
+            ? `  ${t(D.purple, profiles[n].tags.join(', '))}` : '';
           L.push(
             `  ${mu((i + 1) + '.')}  ${t(act ? D.success : D.text, n)}` +
-            `   ${mu(profiles[n])}` +
+            `   ${mu(srv)}` + tags +
             (act ? `  ${t(D.success, '← active')}` : '')
           );
         });
         L.push(''); L.push(hr()); L.push('');
         L.push(`  ${mu('Use ')}${t(D.accent, 'Servers')}${mu(' to connect.')}`);
+        L.push(`  ${mu('Or press ')}${t(D.accent, '[3]')}${mu(' for Quick Connect.')}`);
       } else {
         L.push(`  ${t(D.warning, '⚠')}  ${mu('No profiles saved yet.')}`); L.push('');
-        L.push(`  ${mu('Run: ')}${t(D.accent, 'polaris add <alias> --server <user@host>')}`);
+        L.push(`  ${mu('Go to ')}${t(D.accent, 'Deploy VPS')}${mu(' to provision a server (press ')}${t(D.accent, '[7]')}${mu(' or ')}${t(D.accent, '[Enter]')}${mu(')')}`);
+        L.push(`  ${mu('Or run: ')}${t(D.accent, 'polaris deploy --server ubuntu@<ip>')}`);
       }
     }
     setView('home', L);
@@ -344,22 +350,27 @@ export default async () => {
     L.push(`${t(D.accent, b('⚙  Server Profiles'))}`); L.push(hr()); L.push('');
     if (names.length === 0) {
       L.push(`  ${t(D.warning, '⚠')}  No saved profiles.`); L.push('');
-      L.push(`  ${mu('Run: ')}${t(D.accent, 'polaris add <alias> --server <user@host>')}`);
+      L.push(`  ${t(D.accent, '[Enter]')}${mu(' → Launch Deploy Wizard')}`); L.push('');
+      L.push(`  ${mu('Or run: ')}${t(D.accent, 'polaris add <alias> --server <user@host>')}`);
     } else {
-      L.push(`  ${t(D.accent, '[↑/↓]')}${mu(' Browse   ')}${t(D.accent, '[Enter]')}${mu(' Connect')}`); L.push('');
+      L.push(`  ${t(D.accent, '[↑/↓]')}${mu(' Browse   ')}${t(D.accent, '[Enter]')}${mu(' Connect   ')}${t(D.accent, '[d]')}${mu(' Deploy new')}`); L.push('');
       names.forEach((n, i) => {
         const sel = i === srvIdx, act = n === active;
+        // Support both legacy plain-string and new { server, tags } profile shapes
+        const srv = typeof profiles[n] === 'string' ? profiles[n] : (profiles[n].server || '?');
+        const tags = typeof profiles[n] === 'object' && Array.isArray(profiles[n].tags) && profiles[n].tags.length > 0
+          ? `  ${t(D.purple, '[' + profiles[n].tags.join(', ') + ']')}` : '';
         const cur  = sel ? t(D.accent, '▶') : ' ';
         const name = sel ? b(t(D.bright, n)) : t(act ? D.success : D.text, n);
         const pill = act ? `  ${t(D.success, '⬤')}` : '';
-        L.push(`  ${cur}  ${name}${pill}`);
-        L.push(`      ${mu(profiles[n])}`);
+        L.push(`  ${cur}  ${name}${pill}${tags}`);
+        L.push(`      ${mu(srv)}`);
         L.push('');
       });
       L.push(hr());
       L.push(`  ${mu('Selected: ')}${t(D.accent, names[srvIdx] || '—')}`);
     }
-    setView('servers', L, ['↑/↓', 'Browse'], ['Enter', 'Connect'], ['Esc', 'Back']);
+    setView('servers', L, ['↑/↓', 'Browse'], ['Enter', 'Connect'], ['d', 'Deploy'], ['Esc', 'Back']);
   };
 
   const renderCheck = () => {
@@ -383,13 +394,18 @@ export default async () => {
     L.push(`  Polaris automatically provisions a remote VPS`);
     L.push(`  with WireGuard or AmneziaWG in under 60 seconds.`);
     L.push(''); L.push(hr()); L.push('');
+    L.push(`  ${t(D.accent, b('What you need'))}`); L.push('');
+    L.push(`  ${t(D.success, '①')}  A fresh Linux VPS — ${mu('Ubuntu 22.04 recommended')}`);
+    L.push(`  ${t(D.success, '②')}  SSH access as root or ubuntu`);
+    L.push(`  ${t(D.success, '③')}  UDP port 51820 open in your cloud firewall`);
+    L.push(''); L.push(hr()); L.push('');
     L.push(`  ${t(D.accent, b('Modes'))}`); L.push('');
     L.push(`  ${t(D.success, '▶')}  ${b('WireGuard')}    ${mu('Fast, modern VPN protocol')}`);
-    L.push(`  ${t(D.purple,  '▶')}  ${b('AmneziaWG')}   ${mu('Stealth mode — DPI bypass')}`);
+    L.push(`  ${t(D.purple,  '▶')}  ${b('AmneziaWG')}   ${mu('Stealth mode — bypasses DPI firewalls')}`);
     L.push(''); L.push(hr()); L.push('');
-    L.push(`  Press ${t(D.accent, '[Enter]')} to start the deployment wizard.`);
+    L.push(`  Press ${t(D.accent, '[Enter]')} to launch the interactive setup wizard.`);
     L.push(`  ${mu('Or run: ')}${t(D.accent, 'polaris deploy --server ubuntu@<ip>')}`);
-    setView('deploy', L, ['Enter', 'Deploy wizard'], ['Esc', 'Back']);
+    setView('deploy', L, ['Enter', 'Launch wizard'], ['Esc', 'Back']);
   };
 
   const renderPeers = () => {
@@ -610,6 +626,10 @@ export default async () => {
     if (currentView === 'peers') { renderPeers(); screen.render(); }
   });
 
+  screen.key(['d'], async () => {
+    if (currentView === 'servers') await goto('deploy');
+  });
+
   // ── Arrow keys — context-aware ───────────────────────────────────
   screen.key(['up', 'k'], () => {
     if (currentView === 'servers') {
@@ -644,10 +664,16 @@ export default async () => {
     if (currentView === 'servers') {
       const { profiles } = getProfiles();
       const names = Object.keys(profiles);
-      if (names.length > 0) {
+      if (names.length === 0) {
+        // No profiles → launch deploy wizard
+        await goto('deploy');
+      } else if (names.length > 0) {
+        const entry = profiles[names[srvIdx]];
+        // Support both legacy plain-string and new { server, tags } profile shapes
+        const serverStr = typeof entry === 'string' ? entry : (entry.server || entry);
         await runCmd(async () => {
           const run = (await import('./start.js')).default;
-          await run({ server: profiles[names[srvIdx]], mode: 'auto', json: false });
+          await run({ server: serverStr, mode: 'auto', json: false });
         });
       }
     } else if (currentView === 'check') {
@@ -656,9 +682,58 @@ export default async () => {
         await run({ json: false });
       });
     } else if (currentView === 'deploy') {
+      // ── Interactive Deploy Wizard ──────────────────────────────────
       await runCmd(async () => {
-        console.log('\n  \x1b[36mTo deploy, run:\x1b[0m');
-        console.log('  \x1b[90mpolaris deploy --server ubuntu@<your-ip>\x1b[0m\n');
+        const readline = (await import('node:readline')).default || (await import('node:readline'));
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        const ask = (q) => new Promise(res => rl.question(q, res));
+
+        console.log('\x1b[36m\n  ╔══════════════════════════════════════╗');
+        console.log('  ║   Polaris VPN — Deploy Wizard        ║');
+        console.log('  ╚══════════════════════════════════════╝\x1b[0m\n');
+
+        const serverRaw = await ask('  \x1b[36mServer address\x1b[0m \x1b[90m(e.g. ubuntu@1.2.3.4)\x1b[0m: ');
+        const serverStr = serverRaw.trim();
+        if (!serverStr || !serverStr.includes('@') && !serverStr.includes('.')) {
+          console.log('\n  \x1b[31m✗ Invalid server address.\x1b[0m');
+          rl.close();
+          return;
+        }
+
+        const keyPath = await ask('  \x1b[36mSSH key path\x1b[0m \x1b[90m(leave blank for default ~/.ssh/id_rsa)\x1b[0m: ');
+
+        console.log('\n  \x1b[90mMode options:\x1b[0m');
+        console.log('  \x1b[36m[1]\x1b[0m WireGuard     \x1b[90mFast, modern VPN protocol\x1b[0m');
+        console.log('  \x1b[35m[2]\x1b[0m AmneziaWG     \x1b[90mStealth mode — bypasses DPI firewalls\x1b[0m');
+        const modeChoice = await ask('\n  Select mode \x1b[90m[1/2, default 1]\x1b[0m: ');
+        const mode = modeChoice.trim() === '2' ? 'amneziawg' : 'wireguard';
+
+        const aliasRaw = await ask('  \x1b[36mSave as profile alias\x1b[0m \x1b[90m(leave blank to skip saving)\x1b[0m: ');
+        rl.close();
+
+        console.log(`\n  \x1b[36m▶ Deploying ${mode.toUpperCase()} on ${serverStr}...\x1b[0m\n`);
+
+        const { deployServer } = await import('../core/deploy-service.js');
+        const res = await deployServer(serverStr, {
+          mode,
+          privateKey: keyPath.trim() || undefined,
+          onProgress: (msg) => console.log(`  \x1b[90m→ ${msg}\x1b[0m`)
+        });
+
+        console.log(`\n  \x1b[32m✓ Deployment complete!\x1b[0m`);
+        console.log(`  \x1b[90mConfig: ${res.clientConfPath}\x1b[0m`);
+
+        // Optionally save profile
+        if (aliasRaw.trim()) {
+          const { addProfile } = await import('../core/profile-service.js');
+          addProfile(aliasRaw.trim(), serverStr);
+          console.log(`  \x1b[32m✓ Saved as profile '${aliasRaw.trim()}'\x1b[0m`);
+        }
+
+        // Auto-connect
+        console.log(`\n  \x1b[36m▶ Connecting to tunnel...\x1b[0m\n`);
+        const startRun = (await import('./start.js')).default;
+        await startRun({ server: serverStr, mode, json: false });
       });
     } else if (currentView === 'peers') {
       renderPeers(); screen.render();
