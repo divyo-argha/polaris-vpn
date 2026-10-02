@@ -13,9 +13,9 @@
 class PolarisVpn < Formula
   desc "Production-grade self-hosted VPN CLI with WireGuard, AmneziaWG, TLS & SSH tunnels"
   homepage "https://github.com/Divyo/polaris-vpn"
-  url "https://registry.npmjs.org/polaris-vpn/-/polaris-vpn-1.4.1.tgz"
+  url "https://registry.npmjs.org/polaris-vpn/-/polaris-vpn-1.4.2.tgz"
   # Update sha256 after publishing to npm:
-  #   curl -s https://registry.npmjs.org/polaris-vpn/1.4.1 | python3 -c "import sys,json; print(json.load(sys.stdin)['dist']['shasum'])"
+  #   curl -s https://registry.npmjs.org/polaris-vpn/1.4.2 | python3 -c "import sys,json; print(json.load(sys.stdin)['dist']['shasum'])"
   sha256 "PLACEHOLDER_UPDATE_AFTER_NPM_PUBLISH"
   license "Apache-2.0"
   head "https://github.com/Divyo/polaris-vpn.git", branch: "main"
