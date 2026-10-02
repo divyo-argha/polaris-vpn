@@ -6,6 +6,7 @@ import { getActiveTunnel } from './tunnel-service.js';
 import { stopWgTunnel, startWgTunnel } from '../tunnel/wg.js';
 import { CONFIG_DIR } from '../utils/config.js';
 import { logEvent } from '../utils/logger.js';
+import { sendNotification } from '../utils/notifier.js';
 
 let watchdogTimer = null;
 let consecutiveFailures = 0;
@@ -67,9 +68,19 @@ export const runWatchdogCheck = async () => {
         await new Promise(r => setTimeout(r, 1000));
         startWgTunnel(confPath, true, isAwg);
         logEvent('WATCHDOG', `Tunnel restarted successfully by watchdog`);
+        sendNotification({
+          title: 'Polaris Watchdog Auto-Healed',
+          message: 'VPN gateway heartbeat was lost and tunnel was cleanly re-established.',
+          type: 'info'
+        });
       }
     } catch (err) {
       logEvent('ERROR', `Watchdog auto-reconnect failed: ${err.message}`);
+      sendNotification({
+        title: 'Polaris Watchdog Warning',
+        message: `Failed to auto-reconnect tunnel: ${err.message}`,
+        type: 'error'
+      });
     }
     consecutiveFailures = 0;
     lastStatus = 'RECONNECTED';

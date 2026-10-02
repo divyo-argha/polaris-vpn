@@ -113,3 +113,24 @@ export const tagServer = async (alias, tag, options) => {
     process.exitCode = 1;
   }
 };
+
+export const removeServer = async (alias, options) => {
+  const isJson = options.json;
+  try {
+    const { removeProfile } = await import('../core/profile-service.js');
+    removeProfile(alias);
+    if (isJson) {
+      console.log(JSON.stringify({ success: true, removed: alias }));
+    } else {
+      printSuccess(`Removed profile '${alias}'.`);
+    }
+  } catch (err) {
+    if (isJson) {
+      console.log(JSON.stringify({ error: err.message }));
+    } else {
+      printError(err.message);
+    }
+    process.exitCode = 1;
+  }
+};
+

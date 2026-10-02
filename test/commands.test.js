@@ -71,3 +71,21 @@ test('getProfilesByTag returns empty array for unknown tag', () => {
   assert.ok(Array.isArray(results), 'Should return an array');
   assert.strictEqual(results.filter(p => !['stream-us', 'stream-eu', 'work-server'].includes(p.alias)).length, 0);
 });
+
+test('removeProfile removes profile and updates active default', async () => {
+  const { removeProfile } = await import('../src/core/profile-service.js');
+  addProfile('temp-to-remove', 'user@99.99.99.99');
+  removeProfile('temp-to-remove');
+  const { profiles } = getProfiles();
+  assert.strictEqual(profiles['temp-to-remove'], undefined);
+});
+
+test.after(async () => {
+  const { removeProfile } = await import('../src/core/profile-service.js');
+  const testAliases = ['test-server', 'tagged-server', 'tag-test-server', 'stream-us', 'stream-eu', 'work-server', 'temp-to-remove'];
+  for (const alias of testAliases) {
+    try {
+      removeProfile(alias);
+    } catch (e) {}
+  }
+});

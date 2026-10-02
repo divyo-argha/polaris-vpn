@@ -9,6 +9,7 @@ import { clearBypassRules } from '../utils/bypass.js';
 import { enableSystemProxy, disableSystemProxy } from '../net/system-proxy.js';
 import { loadDaemonState, clearDaemonState, killPid, saveDaemonState } from '../utils/daemon.js';
 import { TUNNEL_PID_FILE, TUNNEL_CONFIG_FILE, CONFIG_DIR, ensureDir } from '../utils/config.js';
+import { sendNotification } from '../utils/notifier.js';
 
 const WG_CONF = path.join(CONFIG_DIR, 'wg', 'wg0.conf');
 const AWG_CONF = path.join(CONFIG_DIR, 'wg', 'awg0.conf');
@@ -44,6 +45,10 @@ export const stopActiveTunnel = (isJson = false) => {
     } else {
       killPid(info.pid);
     }
+    sendNotification({
+      title: 'Polaris VPN Disconnected',
+      message: 'Tunnel disconnected. Internet restored to default gateway.'
+    });
   }
   disableSystemProxy();
   clearBypassRules().catch(() => {});
@@ -77,6 +82,10 @@ export const startTunnel = async (server, port, mode = 'ssh', isJson = false) =>
     if (getKillSwitchConfig()) {
       enableKillSwitch(server);
     }
+    sendNotification({
+      title: 'Polaris VPN Connected',
+      message: `Secure tunnel active via ${server} (${mode.toUpperCase()})`
+    });
     return { pid, server, port: 0, mode: mode };
   } 
   
@@ -95,5 +104,9 @@ export const startTunnel = async (server, port, mode = 'ssh', isJson = false) =>
 
   await waitForSocks(port);
   enableSystemProxy(port);
+  sendNotification({
+    title: 'Polaris VPN Connected',
+    message: `Secure tunnel active via ${server} (${mode.toUpperCase()})`
+  });
   return { pid, server, port, mode };
 };

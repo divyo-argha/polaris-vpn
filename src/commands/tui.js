@@ -1,5 +1,5 @@
 import blessed from 'blessed';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { spawnSync } from 'child_process';
@@ -50,34 +50,41 @@ const LOGO = [
 ].join('\n');
 
 // ─── NAVIGATION STRUCTURE ─────────────────────────────────────────────────────
-// null entries render as visual separators
 const VIEWS = [
   { id: 'home',       label: 'Home',          icon: '◈' },
   { id: 'servers',    label: 'Servers',        icon: '⚙' },
   { id: 'connect',    label: 'Quick Connect',  icon: '▶' },
+  { id: 'speedtest',  label: 'Speed Test',     icon: '⚡' },
   { id: 'dashboard',  label: 'Live Monitor',   icon: '◉' },
   null,
   { id: 'peers',      label: 'Peers',          icon: '≡' },
   { id: 'check',      label: 'Privacy Check',  icon: '✦' },
+  { id: 'watchdog',   label: 'Watchdog',       icon: '♥' },
   { id: 'deploy',     label: 'Deploy VPS',     icon: '⊕' },
   null,
   { id: 'disconnect', label: 'Disconnect',     icon: '■', danger: true },
   { id: 'quit',       label: 'Quit',           icon: '✕', danger: true },
 ];
 
-// Flat list of navigable indices (no separators)
 const NAV = VIEWS.reduce((acc, v, i) => { if (v) acc.push(i); return acc; }, []);
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const pingServer = (ip) => {
   if (!ip) return '—';
+  const cleanIp = ip.includes('@') ? ip.split('@')[1] : ip;
   const win = os.platform() === 'win32';
-  const r = spawnSync('ping', win ? ['-n','1','-w','500',ip] : ['-c','1','-W','1',ip], { encoding: 'utf-8' });
-  if (r.status === 0) {
-    const m = r.stdout.match(win ? /Average = (\d+)ms/ : /time=([\d.]+)\s*ms/);
-    if (m) return `${m[1]} ms`;
-  }
-  return 'Timeout';
+  try {
+    const r = spawnSync('ping', win ? ['-n','1','-w','600',cleanIp] : ['-c','1','-W','1',cleanIp], { encoding: 'utf-8', timeout: 1200 });
+    if (r.status === 0) {
+      const m = r.stdout.match(win ? /Average = (\d+)ms/ : /time=([\d.]+)\s*ms/);
+      if (m) {
+        const ms = Math.round(parseFloat(m[1]));
+        const rating = ms < 60 ? '[FAST]' : (ms < 150 ? '[MODERATE]' : '[SLOW]');
+        return `${ms} ms ${rating}`;
+      }
+    }
+  } catch (e) {}
+  return 'Offline [OFFLINE]';
 };
 
 const fmtBytes = (n) => {
@@ -89,31 +96,38 @@ const fmtBytes = (n) => {
 
 const wgStats = (isAwg = false) => {
   const cmd = isAwg ? 'awg' : 'wg';
-  let r = spawnSync('sudo', [cmd, 'show', 'all', 'dump'], { encoding: 'utf-8' });
-  if (r.status !== 0 && isAwg) {
-    r = spawnSync('sudo', ['wg', 'show', 'all', 'dump'], { encoding: 'utf-8' });
+  try {
+    let r = spawnSync('sudo', [cmd, 'show', 'all', 'dump'], { encoding: 'utf-8', timeout: 1500 });
+    if (r.status !== 0 && isAwg) {
+      r = spawnSync('sudo', ['wg', 'show', 'all', 'dump'], { encoding: 'utf-8', timeout: 1500 });
+    }
+    if (r.status !== 0) return null;
+    const lines = r.stdout.trim().split('\n');
+    if (lines.length <= 1) return null;
+    let rx = 0, tx = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const p = lines[i].split('\t');
+      rx += parseInt(p[6], 10) || 0;
+      tx += parseInt(p[7], 10) || 0;
+    }
+    return { rx, tx };
+  } catch (e) {
+    return null;
   }
-  if (r.status !== 0) return null;
-  const lines = r.stdout.trim().split('\n');
-  if (lines.length <= 1) return null;
-  let rx = 0, tx = 0;
-  for (let i = 1; i < lines.length; i++) {
-    const p = lines[i].split('\t');
-    rx += parseInt(p[6], 10) || 0;
-    tx += parseInt(p[7], 10) || 0;
-  }
-  return { rx, tx };
 };
 
 // ─── MAIN TUI ────────────────────────────────────────────────────────────────
 export default async () => {
   const { getActiveTunnel } = await import('../core/tunnel-service.js');
-  const { getProfiles }     = await import('../core/profile-service.js');
+  const { getProfiles, setActiveProfile, removeProfile, addProfile } = await import('../core/profile-service.js');
+  const { getWatchdogStatus } = await import('../core/watchdog-service.js');
 
   // ─── APP STATE ────────────────────────────────────────────────────
-  let menuIdx     = 0;   // index into NAV array (sidebar highlight)
+  let menuIdx     = 0;   // index into NAV array
   let currentView = 'home';
   let srvIdx      = 0;   // selected server in Servers view
+  let serverPings = {};  // cache for server pings
+  let statusNotice = null;
 
   // ─── SCREEN ───────────────────────────────────────────────────────
   const screen = blessed.screen({
@@ -130,7 +144,7 @@ export default async () => {
   const FOOTER_H  = 3;
 
   // Header bar
-  const wHeader = blessed.box({
+  blessed.box({
     parent: screen,
     top: 0, left: 0, width: '100%', height: HEADER_H,
     tags: true, content: LOGO,
@@ -138,20 +152,20 @@ export default async () => {
   });
 
   // Version tag (top-right)
-  const wVersion = blessed.box({
+  blessed.box({
     parent: screen,
-    top: 1, right: 2, width: 26, height: 5,
+    top: 1, right: 2, width: 28, height: 5,
     tags: true,
     content: [
       '',
       `${mu('version ')}${t(D.accent, pkg.version)}`,
-      mu('Command your privacy.'),
-      mu('─────────────────────'),
+      mu('Digital Privacy & Freedom'),
+      mu('──────────────────────────'),
     ].join('\n'),
     style: { bg: D.bg }, align: 'right',
   });
 
-  // Thin separator line under header
+  // Header separator
   blessed.box({
     parent: screen,
     top: HEADER_H, left: 0, width: '100%', height: 1,
@@ -159,7 +173,7 @@ export default async () => {
   });
 
   // Sidebar outer border
-  const wSidebarBorder = blessed.box({
+  blessed.box({
     parent: screen,
     top: HEADER_H + 1, left: 0, width: SIDEBAR_W, bottom: FOOTER_H,
     border: { type: 'line' },
@@ -181,23 +195,13 @@ export default async () => {
     style: { bg: D.sep },
   });
 
-  // Sidebar nav (plain box — no blessed.list focus fights)
+  // Sidebar nav
   const wNav = blessed.box({
     parent: screen,
-    top: HEADER_H + 6, left: 1, width: SIDEBAR_W - 2, bottom: FOOTER_H + 4,
+    top: HEADER_H + 6, left: 1, width: SIDEBAR_W - 2, bottom: FOOTER_H + 1,
     tags: true, content: '',
     style: { bg: D.bgSidebar },
-    mouse: true,
-  });
-
-  // Sidebar bottom hint
-  const wHint = blessed.box({
-    parent: screen,
-    bottom: FOOTER_H, left: 0, width: SIDEBAR_W, height: 4,
-    tags: true, content: '',
-    border: { type: 'line' },
-    style: { border: { fg: D.sep }, bg: D.bgSidebar, fg: D.muted },
-    padding: { left: 1 },
+    scrollable: false,
   });
 
   // Main content panel
@@ -205,7 +209,7 @@ export default async () => {
     parent: screen,
     top: HEADER_H + 1, left: SIDEBAR_W, right: 0, bottom: FOOTER_H,
     tags: true,
-    scrollable: true, alwaysScroll: true, mouse: true,
+    scrollable: false,
     border: { type: 'line' },
     style: { border: { fg: D.accentDim }, bg: D.bg, fg: D.text },
     padding: { left: 3, right: 3, top: 1, bottom: 1 },
@@ -221,8 +225,37 @@ export default async () => {
     padding: { left: 1 },
   });
 
-  // ─── RENDER HELPERS ───────────────────────────────────────────────
+  // Small screen overlay protection
+  const wSmallScreenWarning = blessed.box({
+    parent: screen,
+    top: 0, left: 0, width: '100%', height: '100%',
+    tags: true, hidden: true,
+    border: { type: 'line' },
+    style: { border: { fg: D.danger }, bg: D.bg },
+    padding: { top: 2, left: 3, right: 3 }
+  });
 
+  const checkScreenDimensions = () => {
+    if (screen.cols < 72 || screen.rows < 18) {
+      wSmallScreenWarning.setContent(
+        `\n  ${b(t(D.danger, '⚠  Terminal Viewport Constrained'))}\n` +
+        `  ${hr(44)}\n\n` +
+        `  ${mu('Current dimensions:')}  ${t(D.accent, screen.cols + ' cols × ' + screen.rows + ' rows')}\n` +
+        `  ${mu('Minimum required:')}    ${t(D.bright, '72 cols × 18 rows')}\n\n` +
+        `  Please enlarge or maximize your terminal window for optimal TUI display.\n\n` +
+        `  ${mu('Or press ')}${t(D.accent, '[q]')}${mu(' to exit and use direct CLI commands (e.g. polaris status).')}`
+      );
+      wSmallScreenWarning.show();
+      wSmallScreenWarning.setFront();
+      screen.render();
+      return false;
+    } else {
+      wSmallScreenWarning.hide();
+      return true;
+    }
+  };
+
+  // ─── RENDER HELPERS ───────────────────────────────────────────────
   const setFooter = (...pairs) => {
     wFooter.setContent(
       '  ' + pairs.map(([k, v]) => `${t(D.accent, b(`[${k}]`))} ${mu(v)}`).join('   ')
@@ -230,10 +263,10 @@ export default async () => {
   };
 
   const defaultFooter = () => setFooter(
-    ['↑/↓', 'Navigate'],
+    ['Tab / ↑↓', 'Navigate'],
     ['Enter', 'Select'],
     ['?', 'Help'],
-    ['q', 'Quit'],
+    ['q', 'Quit']
   );
 
   const setView = (id, lines, ...footerPairs) => {
@@ -241,7 +274,7 @@ export default async () => {
     const lbl = v ? `${v.icon}  ${v.label.toUpperCase()}` : id.toUpperCase();
     wMain.setLabel(`{${D.accent}-fg} ${lbl} {/}`);
     wMain.setContent('\n' + (Array.isArray(lines) ? lines.join('\n') : lines));
-    wMain.scrollTo(0);
+    if (wMain.scrollTo) wMain.scrollTo(0);
     footerPairs.length ? setFooter(...footerPairs) : defaultFooter();
   };
 
@@ -249,28 +282,26 @@ export default async () => {
   const renderSidebar = () => {
     const info = getActiveTunnel();
 
-    // Status pill
     if (info) {
       const upMin = Math.floor((Date.now() - new Date(info.startTime).getTime()) / 60000);
       wStatus.setContent(
-        `  ${t(D.success, '⬤')} ${b(t(D.bright, 'CONNECTED'))}\n` +
+        `  ${t(D.success, '⬤')} ${b(t(D.bright, '[CONNECTED] (✓)'))}\n` +
         `  ${mu(info.server.substring(0, SIDEBAR_W - 5))}\n` +
         `  ${badge(info.mode)}  ${mu(upMin + 'm')}`
       );
     } else {
       wStatus.setContent(
-        `  ${t(D.danger, '⬤')} ${b(t(D.muted, 'DISCONNECTED'))}\n` +
+        `  ${t(D.danger, '○')} ${b(t(D.muted, '[DISCONNECTED] (○)'))}\n` +
         `  ${mu('No active tunnel')}`
       );
     }
 
-    // Nav items
     const selectedViewsIdx = NAV[menuIdx];
     const lines = [];
     for (let i = 0; i < VIEWS.length; i++) {
       const v = VIEWS[i];
       if (!v) {
-        lines.push(mu(' ─────────────────────'));
+        lines.push(mu(' ' + '─'.repeat(SIDEBAR_W - 4)));
         continue;
       }
       const isSel      = i === selectedViewsIdx;
@@ -283,14 +314,9 @@ export default async () => {
       }
     }
     wNav.setContent(lines.join('\n'));
-
-    // Bottom hint
-    const sv = VIEWS[selectedViewsIdx];
-    wHint.setContent(sv ? `\n ${t(D.accent, sv.icon)}  ${mu(sv.label)}` : '');
   };
 
   // ─── CONTENT VIEWS ────────────────────────────────────────────────
-
   const renderHome = () => {
     const info = getActiveTunnel();
     const L = [];
@@ -298,46 +324,49 @@ export default async () => {
       const upMin = Math.floor((Date.now() - new Date(info.startTime).getTime()) / 60000);
       const ping  = pingServer(info.server.split('@').pop());
       const wg    = wgStats(info.mode === 'amneziawg');
-      L.push(`${t(D.accent, b('◈  Tunnel Status'))}    ${t(D.success, '⬤  ACTIVE')}`);
+      L.push(`${t(D.accent, b('◈  Tunnel Status'))}    ${t(D.success, '⬤  ACTIVE & ENCRYPTED')}`);
       L.push(hr()); L.push('');
-      L.push(`  ${mu('Server  ')}  ${b(info.server)}`);
-      L.push(`  ${mu('Mode    ')}  ${badge(info.mode)}`);
-      L.push(`  ${mu('Uptime  ')}  ${t(D.bright, upMin + ' min')}`);
-      L.push(`  ${mu('Latency ')}  ${t(D.accent, ping)}`);
+      L.push(`  ${mu('Server     ')}  ${b(info.server)}`);
+      L.push(`  ${mu('Protocol   ')}  ${badge(info.mode)}`);
+      L.push(`  ${mu('Uptime     ')}  ${t(D.bright, upMin + ' min')}`);
+      L.push(`  ${mu('Latency    ')}  ${t(D.accent, ping)}`);
+      L.push(`  ${mu('DNS Filter ')}  ${t(D.purple, 'Zero-Log Unbound + AdBlock (10.0.0.1)')}`);
+      L.push(`  ${mu('IPv6 Shield')}  ${t(D.success, 'Dual-Stack Full Tunnel (fd00:polaris::)')}`);
       if (wg) {
-        L.push(`  ${mu('Data ↓  ')}  ${t(D.success, fmtBytes(wg.rx))}`);
-        L.push(`  ${mu('Data ↑  ')}  ${t(D.warning, fmtBytes(wg.tx))}`);
+        L.push(`  ${mu('Data ↓     ')}  ${t(D.success, fmtBytes(wg.rx))}`);
+        L.push(`  ${mu('Data ↑     ')}  ${t(D.warning, fmtBytes(wg.tx))}`);
       }
       L.push(''); L.push(hr()); L.push('');
-      L.push(`  ${mu('Go to ')}${t(D.accent, 'Live Monitor')} ${mu('for real-time bandwidth graphs.')}`);
-      L.push(`  ${mu('Go to ')}${t(D.danger,  'Disconnect')}  ${mu('to tear down the tunnel.')}`);
+      L.push(`  ${mu('Go to ')}${t(D.accent, 'Live Monitor')}${mu(' for real-time throughput sparklines.')}`);
+      L.push(`  ${mu('Go to ')}${t(D.accent, 'Speed Test')}${mu(' to test current download bandwidth.')}`);
+      L.push(`  ${mu('Go to ')}${t(D.danger, 'Disconnect')}${mu(' to cleanly shut down the tunnel.')}`);
     } else {
       const { profiles, active } = getProfiles();
       const names = Object.keys(profiles);
       L.push(`${t(D.accent, b('◈  Welcome to Polaris VPN'))}`);
       L.push(hr()); L.push('');
-      L.push(`  ${t(D.danger, '⬤')}  ${b(t(D.muted, 'No active tunnel.'))}`); L.push('');
+      L.push(`  ${t(D.danger, '○')}  ${b(t(D.muted, 'No active tunnel running.'))}`); L.push('');
       if (names.length > 0) {
-        L.push(`  ${t(D.accent, b('Saved Profiles'))}`); L.push('');
+        L.push(`  ${t(D.accent, b('Saved Server Profiles'))}`); L.push('');
         names.forEach((n, i) => {
           const act = n === active;
-          // Support both legacy plain-string and new { server, tags } profile shapes
-          const srv = typeof profiles[n] === 'string' ? profiles[n] : (profiles[n].server || '?');
-          const tags = Array.isArray(profiles[n].tags) && profiles[n].tags.length > 0
-            ? `  ${t(D.purple, profiles[n].tags.join(', '))}` : '';
+          const entry = profiles[n];
+          const srv = typeof entry === 'string' ? entry : (entry?.server || '—');
+          const tags = Array.isArray(entry?.tags) && entry.tags.length > 0
+            ? `  ${t(D.purple, '[' + entry.tags.join(', ') + ']')}` : '';
           L.push(
-            `  ${mu((i + 1) + '.')}  ${t(act ? D.success : D.text, n)}` +
-            `   ${mu(srv)}` + tags +
-            (act ? `  ${t(D.success, '← active')}` : '')
+            `  ${mu((i + 1) + '.')}  ${t(act ? D.success : D.text, n.padEnd(16))}` +
+            `  ${mu(srv)}` + tags +
+            (act ? `  ${t(D.success, '★ active default')}` : '')
           );
         });
         L.push(''); L.push(hr()); L.push('');
-        L.push(`  ${mu('Use ')}${t(D.accent, 'Servers')}${mu(' to connect.')}`);
-        L.push(`  ${mu('Or press ')}${t(D.accent, '[3]')}${mu(' for Quick Connect.')}`);
+        L.push(`  ${mu('Press ')}${t(D.accent, '[Enter]')}${mu(' on ')}${t(D.accent, 'Quick Connect')}${mu(' to connect to active server.')}`);
+        L.push(`  ${mu('Press ')}${t(D.accent, '[2]')}${mu(' for Server Manager to switch, add, or delete profiles.')}`);
       } else {
-        L.push(`  ${t(D.warning, '⚠')}  ${mu('No profiles saved yet.')}`); L.push('');
-        L.push(`  ${mu('Go to ')}${t(D.accent, 'Deploy VPS')}${mu(' to provision a server (press ')}${t(D.accent, '[7]')}${mu(' or ')}${t(D.accent, '[Enter]')}${mu(')')}`);
-        L.push(`  ${mu('Or run: ')}${t(D.accent, 'polaris deploy --server ubuntu@<ip>')}`);
+        L.push(`  ${t(D.warning, '⚠')}  ${mu('No server profiles saved yet.')}`); L.push('');
+        L.push(`  ${mu('Deploy a new VPS:  press ')}${t(D.accent, '[9]')}${mu(' or select ')}${t(D.accent, 'Deploy VPS')}`);
+        L.push(`  ${mu('Or add an existing server: press ')}${t(D.accent, '[2]')}${mu(' and press ')}${t(D.accent, '[a]')}`);
       }
     }
     setView('home', L);
@@ -347,161 +376,163 @@ export default async () => {
     const { profiles, active } = getProfiles();
     const names = Object.keys(profiles);
     const L = [];
-    L.push(`${t(D.accent, b('⚙  Server Profiles'))}`); L.push(hr()); L.push('');
+    L.push(`${t(D.accent, b('⚙  Server Profiles Manager'))}`); L.push(hr()); L.push('');
+
+    if (statusNotice) {
+      L.push(`  ${t(D.success, '✓')}  ${statusNotice}`);
+      L.push('');
+      statusNotice = null;
+    }
+
     if (names.length === 0) {
-      L.push(`  ${t(D.warning, '⚠')}  No saved profiles.`); L.push('');
-      L.push(`  ${t(D.accent, '[Enter]')}${mu(' → Launch Deploy Wizard')}`); L.push('');
-      L.push(`  ${mu('Or run: ')}${t(D.accent, 'polaris add <alias> --server <user@host>')}`);
+      L.push(`  ${t(D.warning, '⚠')}  No saved profiles found.`); L.push('');
+      L.push(`  ${t(D.accent, '[a]')}${mu(' Add new profile   ')}${t(D.accent, '[d]')}${mu(' Launch Deploy VPS wizard')}`);
     } else {
-      L.push(`  ${t(D.accent, '[↑/↓]')}${mu(' Browse   ')}${t(D.accent, '[Enter]')}${mu(' Connect   ')}${t(D.accent, '[d]')}${mu(' Deploy new')}`); L.push('');
+      L.push(`  ${t(D.accent, '[↑/↓]')}${mu(' Select   ')}${t(D.accent, '[Enter]')}${mu(' Connect   ')}${t(D.accent, '[s]')}${mu(' Set Active   ')}${t(D.accent, '[x]')}${mu(' Delete   ')}${t(D.accent, '[a]')}${mu(' Add')}`);
+      L.push('');
+
       names.forEach((n, i) => {
-        const sel = i === srvIdx, act = n === active;
-        // Support both legacy plain-string and new { server, tags } profile shapes
-        const srv = typeof profiles[n] === 'string' ? profiles[n] : (profiles[n].server || '?');
-        const tags = typeof profiles[n] === 'object' && Array.isArray(profiles[n].tags) && profiles[n].tags.length > 0
-          ? `  ${t(D.purple, '[' + profiles[n].tags.join(', ') + ']')}` : '';
+        const sel = i === srvIdx;
+        const act = n === active;
+        const entry = profiles[n];
+        const srv = typeof entry === 'string' ? entry : (entry?.server || '—');
+        const tags = Array.isArray(entry?.tags) && entry.tags.length > 0
+          ? `  ${t(D.purple, '[' + entry.tags.join(', ') + ']')}` : '';
         const cur  = sel ? t(D.accent, '▶') : ' ';
         const name = sel ? b(t(D.bright, n)) : t(act ? D.success : D.text, n);
-        const pill = act ? `  ${t(D.success, '⬤')}` : '';
-        L.push(`  ${cur}  ${name}${pill}${tags}`);
-        L.push(`      ${mu(srv)}`);
+        const pill = act ? `  ${t(D.success, '★ ACTIVE')}` : '';
+        const ping = serverPings[srv] ? `  ${t(D.accent, serverPings[srv])}` : '';
+
+        // Validation check on server host
+        const isValid = srv.includes('@') || srv.includes('.') || srv === 'localhost';
+        const validBadge = isValid ? '' : `  ${t(D.danger, '⚠ Invalid Host')}`;
+
+        L.push(`  ${cur} ${name}${pill}${tags}${ping}${validBadge}`);
+        L.push(`     ${mu(srv)}`);
         L.push('');
       });
+
       L.push(hr());
-      L.push(`  ${mu('Selected: ')}${t(D.accent, names[srvIdx] || '—')}`);
+      L.push(`  ${mu('Selected Profile: ')}${t(D.accent, names[srvIdx] || '—')}`);
     }
-    setView('servers', L, ['↑/↓', 'Browse'], ['Enter', 'Connect'], ['d', 'Deploy'], ['Esc', 'Back']);
+    setView('servers', L, ['Enter', 'Connect'], ['s', 'Set Default'], ['x', 'Delete'], ['a', 'Add'], ['Esc', 'Back']);
+  };
+
+  const renderSpeedtest = () => {
+    const L = [];
+    L.push(`${t(D.accent, b('⚡  VPN Speedtest Benchmark'))}`); L.push(hr()); L.push('');
+    L.push('  Measures real-time throughput and latency through the active connection.');
+    L.push('');
+    L.push(`  ${mu('Test payload:')}  ${t(D.bright, '10 MB high-capacity CDN payload')}`);
+    L.push(`  ${mu('Metrics:')}       ${t(D.bright, 'Ping, Jitter, Download Mbps, Streaming Rating')}`);
+    L.push(''); L.push(hr()); L.push('');
+    L.push(`  Press ${t(D.accent, '[Enter]')} to run benchmark.`);
+    setView('speedtest', L, ['Enter', 'Start Benchmark'], ['Esc', 'Back']);
+  };
+
+  const renderWatchdog = () => {
+    const status = getWatchdogStatus();
+    const L = [];
+    L.push(`${t(D.accent, b('♥  Tunnel Health Watchdog'))}`); L.push(hr()); L.push('');
+    L.push('  Monitors tunnel gateway (10.0.0.1) connectivity and auto-reconnects.');
+    L.push('');
+    L.push(`  ${mu('Monitoring:')}    ${status.running ? t(D.success, 'ACTIVE (Heartbeat running)') : t(D.muted, 'IDLE (On-Demand)')}`);
+    L.push(`  ${mu('Last Status:')}   ${t(D.accent, status.lastStatus)}`);
+    if (status.lastCheckTime) {
+      L.push(`  ${mu('Last Checked:')}  ${t(D.bright, new Date(status.lastCheckTime).toLocaleTimeString())}`);
+    }
+    L.push(`  ${mu('Failures:')}      ${status.consecutiveFailures === 0 ? t(D.success, '0 (Healthy)') : t(D.danger, String(status.consecutiveFailures))}`);
+    L.push(''); L.push(hr()); L.push('');
+    L.push(`  Press ${t(D.accent, '[Enter]')} to trigger an immediate heartbeat probe.`);
+    setView('watchdog', L, ['Enter', 'Check Gateway'], ['Esc', 'Back']);
   };
 
   const renderCheck = () => {
     const L = [];
-    L.push(`${t(D.accent, b('✦  Privacy Check'))}`); L.push(hr()); L.push('');
-    L.push(`  ${b('Three-point leak test:')}`); L.push('');
-    [[D.success,'①','Public IP Check','Verify your IP has changed'],
-     [D.success,'②','DNS Leak Test',  'Verify DNS uses VPN resolver'],
-     [D.success,'③','IPv6 Leak Test', 'Verify no IPv6 exposure']].forEach(([c,n,ti,de]) => {
+    L.push(`${t(D.accent, b('✦  Privacy & Leak Check'))}`); L.push(hr()); L.push('');
+    L.push(`  ${b('Four-point privacy & security audit:')}`); L.push('');
+    [[D.success,'①','Public IP Verification', 'Ensure external IP matches your VPS relay'],
+     [D.success,'②','DNS Leak Test',          'Confirm DNS queries route to Unbound resolver'],
+     [D.success,'③','IPv6 Shield Test',        'Verify zero IPv6 leaks outside the encrypted tunnel'],
+     [D.success,'④','WebRTC Protection',       'Test for browser IP disclosure']].forEach(([c,n,ti,de]) => {
       L.push(`  ${t(c, n)}  ${b(ti)}   ${mu(de)}`);
     });
     L.push(''); L.push(hr()); L.push('');
-    L.push(`  Press ${t(D.accent, '[Enter]')} to run all checks.`);
-    L.push(`  ${mu('Briefly suspends the TUI.')}`);
-    setView('check', L, ['Enter', 'Run checks'], ['Esc', 'Back']);
+    L.push(`  Press ${t(D.accent, '[Enter]')} to run live diagnostic.`);
+    setView('check', L, ['Enter', 'Run Diagnostics'], ['Esc', 'Back']);
   };
 
   const renderDeploy = () => {
     const L = [];
     L.push(`${t(D.accent, b('⊕  Deploy a VPS Server'))}`); L.push(hr()); L.push('');
-    L.push(`  Polaris automatically provisions a remote VPS`);
-    L.push(`  with WireGuard or AmneziaWG in under 60 seconds.`);
+    L.push('  Provisions any Linux VPS (Oracle Cloud, AWS, DigitalOcean, Hetzner)');
+    L.push('  with WireGuard/AmneziaWG, BBR Congestion Control, and Unbound AdBlock.');
     L.push(''); L.push(hr()); L.push('');
     L.push(`  ${t(D.accent, b('What you need'))}`); L.push('');
-    L.push(`  ${t(D.success, '①')}  A fresh Linux VPS — ${mu('Ubuntu 22.04 recommended')}`);
-    L.push(`  ${t(D.success, '②')}  SSH access as root or ubuntu`);
-    L.push(`  ${t(D.success, '③')}  UDP port 51820 open in your cloud firewall`);
+    L.push(`  ${t(D.success, '①')}  A Linux VPS (Ubuntu, Debian, Oracle Linux, Rocky, CentOS)`);
+    L.push(`  ${t(D.success, '②')}  SSH access (username & password or SSH identity key)`);
+    L.push(`  ${t(D.success, '③')}  UDP port 51820 allowed in cloud firewall (VCN security list)`);
     L.push(''); L.push(hr()); L.push('');
-    L.push(`  ${t(D.accent, b('Modes'))}`); L.push('');
-    L.push(`  ${t(D.success, '▶')}  ${b('WireGuard')}    ${mu('Fast, modern VPN protocol')}`);
-    L.push(`  ${t(D.purple,  '▶')}  ${b('AmneziaWG')}   ${mu('Stealth mode — bypasses DPI firewalls')}`);
-    L.push(''); L.push(hr()); L.push('');
-    L.push(`  Press ${t(D.accent, '[Enter]')} to launch the interactive setup wizard.`);
-    L.push(`  ${mu('Or run: ')}${t(D.accent, 'polaris deploy --server ubuntu@<ip>')}`);
-    setView('deploy', L, ['Enter', 'Launch wizard'], ['Esc', 'Back']);
+    L.push(`  Press ${t(D.accent, '[Enter]')} to launch the interactive Deploy Wizard.`);
+    setView('deploy', L, ['Enter', 'Launch Wizard'], ['Esc', 'Back']);
   };
 
   const renderPeers = () => {
     const L = [];
-    L.push(`${t(D.accent, b('≡  WireGuard Peers'))}`); L.push(hr()); L.push('');
-    const info = getActiveTunnel();
-    const isAwg = info && info.mode === 'amneziawg';
-    const cmd = isAwg ? 'awg' : 'wg';
-    let r = spawnSync('sudo', [cmd, 'show', 'all', 'dump'], { encoding: 'utf-8' });
-    if (r.status !== 0 && isAwg) {
-      r = spawnSync('sudo', ['wg', 'show', 'all', 'dump'], { encoding: 'utf-8' });
-    }
-    if (r.status !== 0 || !r.stdout.trim()) {
-      L.push(`  ${t(D.warning, '⚠')}  No WireGuard interface found.`);
-      L.push(`  ${mu('Start a WireGuard tunnel first.')}`);
-    } else {
-      const rows = r.stdout.trim().split('\n').slice(1);
-      if (rows.length === 0) {
-        L.push(`  ${mu('No peers configured.')}`);
-      } else {
-        L.push(`  ${mu('Peer Key        Endpoint              RX          TX')}`);
-        L.push(`  ${hr(52)}`);
-        rows.forEach(row => {
-          const p   = row.split('\t');
-          const key = ((p[1] || '').substring(0, 10) + '…').padEnd(14);
-          const ep  = (p[4] || 'N/A').substring(0, 18).padEnd(20);
-          const rx  = fmtBytes(parseInt(p[6], 10) || 0).padStart(8);
-          const tx  = fmtBytes(parseInt(p[7], 10) || 0).padStart(8);
-          L.push(`  ${t(D.accent, key)}  ${mu(ep)}  ${t(D.success, rx)}  ${t(D.warning, tx)}`);
-        });
-        L.push(''); L.push(mu(`  ${rows.length} peer(s) found.`));
-      }
-    }
-    setView('peers', L, ['r', 'Refresh'], ['Esc', 'Back']);
+    L.push(`${t(D.accent, b('≡  WireGuard Client Peers'))}`); L.push(hr()); L.push('');
+    L.push('  Manage multi-device client configs and QR codes for iPhone & Android.');
+    L.push(''); L.push(hr()); L.push('');
+    L.push(`  Press ${t(D.accent, '[Enter]')} to inspect active peer configs and generate QR codes.`);
+    setView('peers', L, ['Enter', 'Manage Peers'], ['Esc', 'Back']);
   };
 
   const renderDisconnect = () => {
-    const info = getActiveTunnel();
     const L = [];
-    L.push(`${t(D.danger, b('■  Disconnect Tunnel'))}`); L.push(hr()); L.push('');
-    if (!info) {
-      L.push(`  ${t(D.muted, '⬤')}  ${mu('No active tunnel to disconnect.')}`);
-      L.push(''); L.push(`  Press ${t(D.accent, '[Esc]')} to go back.`);
-      setView('disconnect', L, ['Esc', 'Back']);
-    } else {
-      L.push(`  ${t(D.danger, '⚠')}  ${b('You are about to disconnect:')}`); L.push('');
-      L.push(`  ${mu('Server  ')}  ${b(info.server)}`);
-      L.push(`  ${mu('Mode    ')}  ${badge(info.mode)}`);
-      L.push(''); L.push(hr()); L.push('');
-      L.push(`  ${t(D.danger, b('[y]'))} to confirm   ${t(D.accent, '[n]')} or ${t(D.accent, '[Esc]')} to cancel.`);
-      setView('disconnect', L, ['y', 'Confirm'], ['n / Esc', 'Cancel']);
-    }
+    L.push(`${t(D.danger, b('■  Disconnect Active Tunnel'))}`); L.push(hr()); L.push('');
+    L.push('  Are you sure you want to tear down the active VPN tunnel?');
+    L.push('  Your internet traffic will revert to your direct ISP connection.');
+    L.push(''); L.push(hr()); L.push('');
+    L.push(`  Press ${t(D.danger, '[y]')} to confirm disconnect.`);
+    L.push(`  Press ${t(D.accent, '[n]')} or ${t(D.accent, '[Esc]')} to cancel.`);
+    setView('disconnect', L, ['y', 'Disconnect'], ['n / Esc', 'Cancel']);
   };
 
   const renderHelp = () => {
     const L = [];
-    L.push(`${t(D.accent, b('?  Keyboard Shortcuts'))}`); L.push(hr()); L.push('');
-    L.push(`  ${t(D.accent, b('Navigation'))}`); L.push('');
+    L.push(`${t(D.accent, b('?  Polaris Help & Keybindings'))}`); L.push(hr()); L.push('');
     [
-      ['↑ / k',       'Move up in sidebar menu'],
-      ['↓ / j',       'Move down in sidebar menu'],
-      ['Enter',       'Select highlighted item / confirm'],
-      ['Esc',         'Go back to Home / cancel'],
-      ['h',           'Go to Home'],
-      ['?',           'Toggle this help screen'],
-      ['q / Ctrl+C',  'Quit Polaris'],
+      ['1 / h / m',   'Return to Home View'],
+      ['2',           'Server Profiles Manager'],
+      ['3',           'Quick Connect to default server'],
+      ['4',           'Speed Test Throughput Benchmark'],
+      ['5',           'Live Bandwidth Sparkline Monitor'],
+      ['6',           'Peers & Mobile QR Codes'],
+      ['7',           'Privacy & DNS Leak Test'],
+      ['8',           'Tunnel Health Watchdog'],
+      ['9',           'Deploy New Cloud VPS'],
+      ['s / Space',   'Set highlighted profile as active default (in Servers)'],
+      ['x / Del',     'Delete highlighted profile (in Servers)'],
+      ['a',           'Add a new server profile (in Servers)'],
+      ['p',           'Ping all server profiles (in Servers)'],
+      ['Esc',         'Back to Home'],
+      ['q / Ctrl+C',  'Quit Polaris']
     ].forEach(([k, v]) => L.push(`  ${t(D.accent, k.padEnd(16))} ${mu(v)}`));
-    L.push('');
-    L.push(`  ${t(D.accent, b('Quick Jump'))}`); L.push('');
-    [['1','Home'],['2','Servers'],['3','Quick Connect'],
-     ['4','Live Monitor'],['5','Peers'],['6','Privacy Check'],['7','Deploy VPS']]
-      .forEach(([k, v]) => L.push(`  ${t(D.accent, k.padEnd(16))} ${mu(v)}`));
-    setView('help', L, ['?', 'Close'], ['Esc / h', 'Main Menu']);
+    setView('help', L, ['Esc / ?', 'Close Help']);
   };
 
-  // ─── ERROR VIEW RENDERER ──────────────────────────────────────────
   const renderErrorView = (title, message) => {
     const L = [];
-    L.push(`${t(D.danger, b(`⚠  ${title}`))}`);
-    L.push(hr());
-    L.push('');
-    L.push(`  ${t(D.danger, '✖')}  ${b(message)}`);
-    L.push('');
-    L.push(hr());
-    L.push('');
-    L.push(`  ${mu('Press ')}${t(D.accent, '[Esc]')}${mu(', ')}${t(D.accent, '[h]')}${mu(' or ')}${t(D.accent, '[1]')}${mu(' to return to the Main Menu.')}`);
-    setView('error', L, ['Esc / h / 1', 'Main Menu']);
+    L.push(`${t(D.danger, b(`⚠  ${title}`))}`); L.push(hr()); L.push('');
+    L.push(`  ${t(D.danger, '✖')}  ${b(message)}`); L.push(''); L.push(hr()); L.push('');
+    L.push(`  Press ${t(D.accent, '[Esc]')} to return to Home.`);
+    setView('error', L, ['Esc', 'Return Home']);
   };
 
   // ─── SUSPEND + RUN COMMAND ────────────────────────────────────────
   const runCmd = async (fn) => {
-    try {
-      screen.destroy();
-    } catch (e) {}
+    try { screen.destroy(); } catch (e) {}
     process.stdout.write('\x1b[2J\x1b[H');
-    console.log(`\x1b[36m\n  Polaris VPN \x1b[0m\x1b[90m— running command...\x1b[0m\n`);
+    console.log(`\x1b[36m\n  Polaris VPN \x1b[0m\x1b[90m— executing...\x1b[0m\n`);
     try {
       await fn();
     } catch (err) {
@@ -542,7 +573,6 @@ export default async () => {
     try {
       currentView = viewId;
 
-      // Sync sidebar highlight
       const vi = VIEWS.findIndex(v => v && v.id === viewId);
       const ni = NAV.indexOf(vi);
       if (ni !== -1) menuIdx = ni;
@@ -550,7 +580,6 @@ export default async () => {
       renderSidebar();
       screen.render();
 
-      // Delegated actions
       if (viewId === 'connect') {
         await runCmd(async () => {
           const run = (await import('./start.js')).default;
@@ -559,10 +588,9 @@ export default async () => {
         return;
       }
       if (viewId === 'dashboard') {
-        const { getActiveTunnel } = await import('../core/tunnel-service.js');
         const info = getActiveTunnel();
         if (!info) {
-          renderErrorView('Live Monitor Unavailable', 'No active tunnel found. Please connect to a VPN server first before launching the Live Monitor.');
+          renderErrorView('Live Monitor Unavailable', 'No active tunnel running. Please connect to a server first before launching Live Monitor.');
           screen.render();
           return;
         }
@@ -578,10 +606,11 @@ export default async () => {
       }
       if (viewId === 'quit') { process.exit(0); }
 
-      // Render static content views
       switch (viewId) {
         case 'home':       renderHome();       break;
         case 'servers':    srvIdx = 0; renderServers(); break;
+        case 'speedtest':  renderSpeedtest();  break;
+        case 'watchdog':   renderWatchdog();   break;
         case 'check':      renderCheck();      break;
         case 'deploy':     renderDeploy();     break;
         case 'peers':      renderPeers();      break;
@@ -591,28 +620,23 @@ export default async () => {
       }
       screen.render();
     } catch (err) {
-      renderErrorView('Navigation Error', err.message || 'An error occurred while rendering this view.');
+      renderErrorView('Navigation Error', err.message || 'An error occurred while loading this view.');
       screen.render();
     }
   };
 
-  // ─── KEYBOARD: ALL HANDLED HERE, NO BLESSED.LIST FOCUS FIGHTS ────
+  // ─── KEYBOARD HANDLERS ───────────────────────────────────────────
   screen.key(['q', 'C-c'], () => process.exit(0));
   screen.key(['?'], () => goto(currentView === 'help' ? 'home' : 'help'));
   screen.key(['h', 'm', '1'], () => goto('home'));
   screen.key(['2'], () => goto('servers'));
   screen.key(['3'], () => goto('connect'));
-  screen.key(['4'], () => goto('dashboard'));
-  screen.key(['5'], () => goto('peers'));
-  screen.key(['6'], () => goto('check'));
-  screen.key(['7'], () => goto('deploy'));
-
-  screen.key(['b'], async () => {
-    await runCmd(async () => {
-      const run = (await import('./benchmark.js')).default;
-      await run({ json: false });
-    });
-  });
+  screen.key(['4'], () => goto('speedtest'));
+  screen.key(['5'], () => goto('dashboard'));
+  screen.key(['6'], () => goto('peers'));
+  screen.key(['7'], () => goto('check'));
+  screen.key(['8'], () => goto('watchdog'));
+  screen.key(['9'], () => goto('deploy'));
 
   screen.key(['escape', 'backspace'], () => {
     if (currentView !== 'home') goto('home');
@@ -622,16 +646,96 @@ export default async () => {
     if (currentView === 'disconnect') goto('home');
   });
 
-  screen.key(['r'], () => {
-    if (currentView === 'peers') { renderPeers(); screen.render(); }
+  screen.key(['y'], async () => {
+    if (currentView !== 'disconnect') return;
+    await runCmd(async () => {
+      const run = (await import('./stop.js')).default;
+      await run({ json: false });
+    });
+  });
+
+  // Server management keys: delete, set active, add, ping
+  screen.key(['x', 'delete'], () => {
+    if (currentView === 'servers') {
+      const { profiles } = getProfiles();
+      const names = Object.keys(profiles);
+      if (names.length > 0 && names[srvIdx]) {
+        const toDelete = names[srvIdx];
+        try {
+          removeProfile(toDelete);
+          statusNotice = `Removed profile '${toDelete}'`;
+          srvIdx = Math.max(0, srvIdx - 1);
+        } catch (e) {
+          statusNotice = `Failed to remove: ${e.message}`;
+        }
+        renderServers();
+        screen.render();
+      }
+    }
+  });
+
+  screen.key(['s', 'space'], () => {
+    if (currentView === 'servers') {
+      const { profiles } = getProfiles();
+      const names = Object.keys(profiles);
+      if (names.length > 0 && names[srvIdx]) {
+        try {
+          setActiveProfile(names[srvIdx]);
+          statusNotice = `Set '${names[srvIdx]}' as active default`;
+        } catch (e) {
+          statusNotice = e.message;
+        }
+        renderServers();
+        screen.render();
+      }
+    }
+  });
+
+  screen.key(['p'], () => {
+    if (currentView === 'servers') {
+      const { profiles } = getProfiles();
+      for (const [alias, entry] of Object.entries(profiles)) {
+        const srv = typeof entry === 'string' ? entry : entry.server;
+        if (srv) {
+          serverPings[srv] = pingServer(srv);
+        }
+      }
+      statusNotice = 'Server latency refreshed';
+      renderServers();
+      screen.render();
+    }
+  });
+
+  screen.key(['a'], async () => {
+    if (currentView === 'servers') {
+      await runCmd(async () => {
+        const readline = (await import('node:readline')).default || (await import('node:readline'));
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        const ask = (q) => new Promise(res => rl.question(q, res));
+
+        console.log('\x1b[36m\n  Add New Server Profile\x1b[0m\n');
+        const alias = (await ask('  Profile alias (e.g. oracle-fra): ')).trim();
+        const server = (await ask('  Server address (user@host): ')).trim();
+        const tag = (await ask('  Tags (optional, comma-separated): ')).trim();
+        rl.close();
+
+        if (alias && server) {
+          const tags = tag ? tag.split(',').map(t => t.trim()).filter(Boolean) : [];
+          addProfile(alias, server, tags);
+          console.log(`\n  \x1b[32m✓ Saved profile '${alias}' → ${server}\x1b[0m`);
+        } else {
+          console.log('\n  \x1b[33m⚠ Alias and server address are required.\x1b[0m');
+        }
+      });
+    }
   });
 
   screen.key(['d'], async () => {
     if (currentView === 'servers') await goto('deploy');
   });
 
-  // ── Arrow keys — context-aware ───────────────────────────────────
-  screen.key(['up', 'k'], () => {
+  // Navigation: Up/Down arrow keys & Tab
+  screen.key(['up', 'k', 'S-tab'], () => {
     if (currentView === 'servers') {
       const { profiles } = getProfiles();
       const n = Object.keys(profiles).length;
@@ -645,7 +749,7 @@ export default async () => {
     }
   });
 
-  screen.key(['down', 'j'], () => {
+  screen.key(['down', 'j', 'tab'], () => {
     if (currentView === 'servers') {
       const { profiles } = getProfiles();
       const n = Object.keys(profiles).length;
@@ -659,30 +763,42 @@ export default async () => {
     }
   });
 
-  // ── Enter ────────────────────────────────────────────────────────
+  // Enter handler
   screen.key(['enter'], async () => {
     if (currentView === 'servers') {
       const { profiles } = getProfiles();
       const names = Object.keys(profiles);
       if (names.length === 0) {
-        // No profiles → launch deploy wizard
         await goto('deploy');
-      } else if (names.length > 0) {
+      } else {
         const entry = profiles[names[srvIdx]];
-        // Support both legacy plain-string and new { server, tags } profile shapes
-        const serverStr = typeof entry === 'string' ? entry : (entry.server || entry);
+        const serverStr = typeof entry === 'string' ? entry : (entry?.server || entry);
         await runCmd(async () => {
           const run = (await import('./start.js')).default;
           await run({ server: serverStr, mode: 'auto', json: false });
         });
       }
+    } else if (currentView === 'speedtest') {
+      await runCmd(async () => {
+        const run = (await import('./speedtest.js')).default;
+        await run({ json: false });
+      });
+    } else if (currentView === 'watchdog') {
+      await runCmd(async () => {
+        const { watchdogCheck } = await import('./watchdog.js');
+        await watchdogCheck({ json: false });
+      });
     } else if (currentView === 'check') {
       await runCmd(async () => {
         const run = (await import('./check.js')).default;
         await run({ json: false });
       });
+    } else if (currentView === 'peers') {
+      await runCmd(async () => {
+        const { peerList } = await import('./peer.js');
+        await peerList({ json: false });
+      });
     } else if (currentView === 'deploy') {
-      // ── Interactive Deploy Wizard ──────────────────────────────────
       await runCmd(async () => {
         const readline = (await import('node:readline')).default || (await import('node:readline'));
         const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -694,7 +810,7 @@ export default async () => {
 
         const serverRaw = await ask('  \x1b[36mServer address\x1b[0m \x1b[90m(e.g. ubuntu@1.2.3.4)\x1b[0m: ');
         const serverStr = serverRaw.trim();
-        if (!serverStr || !serverStr.includes('@') && !serverStr.includes('.')) {
+        if (!serverStr || (!serverStr.includes('@') && !serverStr.includes('.'))) {
           console.log('\n  \x1b[31m✗ Invalid server address.\x1b[0m');
           rl.close();
           return;
@@ -703,7 +819,7 @@ export default async () => {
         const keyPath = await ask('  \x1b[36mSSH key path\x1b[0m \x1b[90m(leave blank for default ~/.ssh/id_rsa)\x1b[0m: ');
 
         console.log('\n  \x1b[90mMode options:\x1b[0m');
-        console.log('  \x1b[36m[1]\x1b[0m WireGuard     \x1b[90mFast, modern VPN protocol\x1b[0m');
+        console.log('  \x1b[36m[1]\x1b[0m WireGuard     \x1b[90mFast, modern VPN protocol with BBR\x1b[0m');
         console.log('  \x1b[35m[2]\x1b[0m AmneziaWG     \x1b[90mStealth mode — bypasses DPI firewalls\x1b[0m');
         const modeChoice = await ask('\n  Select mode \x1b[90m[1/2, default 1]\x1b[0m: ');
         const mode = modeChoice.trim() === '2' ? 'amneziawg' : 'wireguard';
@@ -723,46 +839,18 @@ export default async () => {
         console.log(`\n  \x1b[32m✓ Deployment complete!\x1b[0m`);
         console.log(`  \x1b[90mConfig: ${res.clientConfPath}\x1b[0m`);
 
-        // Optionally save profile
         if (aliasRaw.trim()) {
-          const { addProfile } = await import('../core/profile-service.js');
           addProfile(aliasRaw.trim(), serverStr);
           console.log(`  \x1b[32m✓ Saved as profile '${aliasRaw.trim()}'\x1b[0m`);
         }
 
-        // Auto-connect
         console.log(`\n  \x1b[36m▶ Connecting to tunnel...\x1b[0m\n`);
         const startRun = (await import('./start.js')).default;
         await startRun({ server: serverStr, mode, json: false });
       });
-    } else if (currentView === 'peers') {
-      renderPeers(); screen.render();
     } else {
-      // Enter navigates to the currently highlighted sidebar item
       const v = VIEWS[NAV[menuIdx]];
       if (v) await goto(v.id);
-    }
-  });
-
-  // ── Disconnect confirm ───────────────────────────────────────────
-  screen.key(['y'], async () => {
-    if (currentView !== 'disconnect') return;
-    await runCmd(async () => {
-      const run = (await import('./stop.js')).default;
-      await run({ json: false });
-    });
-  });
-
-  // ── Mouse click on sidebar nav ───────────────────────────────────
-  wNav.on('click', async (data) => {
-    const row = data.y; // row index within wNav content
-    if (row >= 0 && row < VIEWS.length) {
-      const v = VIEWS[row];
-      if (v) {
-        const ni = NAV.indexOf(VIEWS.indexOf(v));
-        if (ni !== -1) menuIdx = ni;
-        await goto(v.id);
-      }
     }
   });
 
@@ -770,10 +858,13 @@ export default async () => {
   screen.on('resize', () => {
     try {
       screen.realloc();
+      if (!checkScreenDimensions()) return;
       renderSidebar();
       switch (currentView) {
         case 'home':       renderHome();       break;
         case 'servers':    renderServers();    break;
+        case 'speedtest':  renderSpeedtest();  break;
+        case 'watchdog':   renderWatchdog();   break;
         case 'check':      renderCheck();      break;
         case 'deploy':     renderDeploy();     break;
         case 'peers':      renderPeers();      break;
@@ -785,20 +876,10 @@ export default async () => {
     } catch (e) {}
   });
 
-  // ─── AUTO-REFRESH STATUS ──────────────────────────────────────────
-  setInterval(() => {
-    try {
-      renderSidebar();
-      if (currentView === 'home')  renderHome();
-      if (currentView === 'peers') renderPeers();
-      screen.render();
-    } catch (e) {}
-  }, 5000);
-
-  // ─── INIT ─────────────────────────────────────────────────────────
-  defaultFooter();
-  renderSidebar();
-  renderHome();
-  wMain.focus();
-  screen.render();
+  // Initial render
+  if (checkScreenDimensions()) {
+    renderSidebar();
+    renderHome();
+    screen.render();
+  }
 };

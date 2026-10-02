@@ -62,6 +62,24 @@ export const setActiveProfile = (alias) => {
   return { alias, server: profiles[alias].server };
 };
 
+/**
+ * Removes a server profile.
+ * @param {string} alias
+ */
+export const removeProfile = (alias) => {
+  const raw = store.get('servers', {});
+  if (!raw[alias]) {
+    throw new Error(`Profile '${alias}' not found`);
+  }
+  delete raw[alias];
+  store.set('servers', raw);
+  if (store.get('activeServer') === alias) {
+    const remaining = Object.keys(raw);
+    store.set('activeServer', remaining.length > 0 ? remaining[0] : null);
+  }
+  return true;
+};
+
 // ─── Tag Management ──────────────────────────────────────────────────────────
 
 /**

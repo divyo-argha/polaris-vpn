@@ -159,6 +159,20 @@ program
     }
   });
 
+program
+  .command('remove <alias>')
+  .alias('rm')
+  .description('Delete a saved server profile')
+  .action(async (alias, options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { removeServer } = await import('./commands/servers.js');
+      await removeServer(alias, cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
 const dnsCmd = program.command('dns').description('Manage local DNS-over-HTTPS resolver');
 
 dnsCmd
@@ -517,7 +531,6 @@ wdCmd
     }
   });
 
-// Also wire --tag into polaris add
 program
   .command('add <alias>')
   .description('Save a server profile for quick access')
@@ -528,6 +541,31 @@ program
     try {
       const { addServer } = await import('./commands/servers.js');
       await addServer(alias, cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
+program
+  .command('completion [shell]')
+  .description('Generate shell tab-completion script for bash, zsh, or fish')
+  .action(async (shell, options, cmd) => {
+    try {
+      const run = (await import('./commands/completion.js')).default;
+      await run(shell, cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
+program
+  .command('setup')
+  .description('Run system environment diagnostics and onboarding wizard')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const run = (await import('./commands/setup.js')).default;
+      await run(cmd.optsWithGlobals());
     } catch (err) {
       handleError('Command failed', err, cmd.optsWithGlobals().json);
     }
