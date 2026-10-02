@@ -98,13 +98,14 @@ export const addPeer = async (name) => {
     }
 
     const peerIp = `10.0.0.${nextIpIndex}`;
+    const peerIp6 = `fd00:polaris::${nextIpIndex}`;
     const peerKeys = generateKeyPair();
 
     // 2. Append peer to remote wg0.conf
     const peerConfigBlock = `\n[Peer]
 # Name: ${name}
 PublicKey = ${peerKeys.publicKey}
-AllowedIPs = ${peerIp}/32
+AllowedIPs = ${peerIp}/32, ${peerIp6}/128
 `;
 
     const writeCmd = `echo "${peerConfigBlock.replace(/"/g, '\\"')}" | sudo tee -a ${confFile}`;
@@ -130,14 +131,15 @@ H4 = ${info.awgParams.H4}`;
     // 3. Save peer config locally
     const clientConf = `[Interface]
 PrivateKey = ${peerKeys.privateKey}
-Address = ${peerIp}/24
-DNS = 10.0.0.1
+Address = ${peerIp}/24, ${peerIp6}/64
+DNS = 10.0.0.1, fd00:polaris::1
+MTU = 1420
 ${obfuscationBlock}
 
 [Peer]
 PublicKey = ${info.serverPublicKey}
 Endpoint = ${info.server.split('@')[1]}:51820
-AllowedIPs = 0.0.0.0/0
+AllowedIPs = 0.0.0.0/0, ::/0
 PersistentKeepalive = 25
 `;
 

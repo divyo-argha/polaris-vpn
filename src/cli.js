@@ -476,6 +476,47 @@ program
     }
   });
 
+program
+  .command('speedtest')
+  .description('Benchmark latency and download throughput through the VPN')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const run = (await import('./commands/speedtest.js')).default;
+      await run(cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
+const wdCmd = program.command('watchdog').description('Monitor tunnel health and heartbeat');
+
+wdCmd
+  .command('check')
+  .description('Run a one-time tunnel heartbeat check and auto-heal if down')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { watchdogCheck } = await import('./commands/watchdog.js');
+      await watchdogCheck(cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
+wdCmd
+  .command('status')
+  .description('Show current watchdog monitoring status')
+  .action(async (options, cmd) => {
+    if (!cmd.optsWithGlobals().json) printBanner();
+    try {
+      const { watchdogStatus } = await import('./commands/watchdog.js');
+      await watchdogStatus(cmd.optsWithGlobals());
+    } catch (err) {
+      handleError('Command failed', err, cmd.optsWithGlobals().json);
+    }
+  });
+
 // Also wire --tag into polaris add
 program
   .command('add <alias>')

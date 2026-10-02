@@ -6,6 +6,7 @@ import { startTlsBackground } from '../tunnel/tls.js';
 import { startWgTunnel, stopWgTunnel } from '../tunnel/wg.js';
 import { enableKillSwitch, disableKillSwitch, getKillSwitchConfig } from '../utils/kill-switch.js';
 import { clearBypassRules } from '../utils/bypass.js';
+import { enableSystemProxy, disableSystemProxy } from '../net/system-proxy.js';
 import { loadDaemonState, clearDaemonState, killPid, saveDaemonState } from '../utils/daemon.js';
 import { TUNNEL_PID_FILE, TUNNEL_CONFIG_FILE, CONFIG_DIR, ensureDir } from '../utils/config.js';
 
@@ -44,6 +45,7 @@ export const stopActiveTunnel = (isJson = false) => {
       killPid(info.pid);
     }
   }
+  disableSystemProxy();
   clearBypassRules().catch(() => {});
   clearDaemonState(TUNNEL_PID_FILE, TUNNEL_CONFIG_FILE);
   return info;
@@ -92,5 +94,6 @@ export const startTunnel = async (server, port, mode = 'ssh', isJson = false) =>
   }
 
   await waitForSocks(port);
+  enableSystemProxy(port);
   return { pid, server, port, mode };
 };

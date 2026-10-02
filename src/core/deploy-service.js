@@ -97,13 +97,15 @@ fi
         let res = await sshExec(conn, installScript);
         if (res.code !== 0) throw new Error(`Installation failed: ${res.stderr || res.stdout}`);
 
-        // Step 2: Enable packet forwarding, BBR congestion control, and paid-grade kernel performance
-        onProgress('Enabling BBR congestion control and kernel network optimizations...');
+        // Step 2: Enable packet forwarding, IPv6 forwarding, BBR congestion control, and paid-grade kernel performance
+        onProgress('Enabling BBR congestion control, IPv6 routing, and kernel network optimizations...');
         const sysctlScript = `
 sudo modprobe tcp_bbr 2>/dev/null || true
 cat << 'EOF' | sudo tee /etc/sysctl.d/99-polaris.conf
 net.ipv4.ip_forward=1
 net.ipv4.ip_nonlocal_bind=1
+net.ipv6.conf.all.forwarding=1
+net.ipv6.conf.default.forwarding=1
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 net.core.rmem_max=16777216
@@ -111,7 +113,7 @@ net.core.wmem_max=16777216
 net.ipv4.tcp_rmem=4096 87380 16777216
 net.ipv4.tcp_wmem=4096 65536 16777216
 EOF
-sudo sysctl -p /etc/sysctl.d/99-polaris.conf 2>/dev/null || sudo sysctl -w net.ipv4.ip_forward=1 net.ipv4.ip_nonlocal_bind=1
+sudo sysctl -p /etc/sysctl.d/99-polaris.conf 2>/dev/null || sudo sysctl -w net.ipv4.ip_forward=1 net.ipv4.ip_nonlocal_bind=1 net.ipv6.conf.all.forwarding=1 2>/dev/null || true
 `;
         res = await sshExec(conn, sysctlScript);
         if (res.code !== 0) throw new Error(`Kernel network setup failed: ${res.stderr}`);
@@ -121,8 +123,8 @@ sudo sysctl -p /etc/sysctl.d/99-polaris.conf 2>/dev/null || sudo sysctl -w net.i
         res = await sshExec(conn, "ip route show default | awk '/default/ {print $5}'");
         const ethInterface = res.stdout.trim() || 'eth0';
 
-        // Step 4: Write server config with MSS Clamping and robust firewall rules
-        onProgress(`Configuring server ${ifaceName}...`);
+        // Step 4: Write server config with Dual-Stack IPv4/IPv6, Multi-Port Redirects (53, 443, 51820), and MSS Clamping
+        onProgress(`Configuring server ${ifaceName} (Dual-Stack IPv4/IPv6 + Multi-Port)...`);
         
         let obfuscationBlock = '';
         if (isAwg) {
@@ -139,15 +141,15 @@ H4 = ${awgParams.H4}`;
 
         const serverConf = `[Interface]
 PrivateKey = ${serverKeys.privateKey}
-Address = 10.0.0.1/24
+Address = 10.0.0.1/24, fd00:polaris::1/64
 ListenPort = 51820
-PostUp = iptables -I INPUT 1 -p udp --dport 51820 -j ACCEPT; iptables -I FORWARD 1 -i %i -j ACCEPT; iptables -I FORWARD 1 -o %i -m state --state RELATED,ESTABLISHED -j ACCEPT; iptables -t nat -A POSTROUTING -o ${ethInterface} -j MASQUERADE; iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu; (command -v ufw >/dev/null && ufw route allow in on ${ifaceName} 2>/dev/null || true)
-PostDown = iptables -D INPUT -p udp --dport 51820 -j ACCEPT 2>/dev/null || true; iptables -D FORWARD -i %i -j ACCEPT 2>/dev/null || true; iptables -D FORWARD -o %i -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true; iptables -t nat -D POSTROUTING -o ${ethInterface} -j MASQUERADE 2>/dev/null || true; iptables -t mangle -D FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true; (command -v ufw >/dev/null && ufw route delete allow in on ${ifaceName} 2>/dev/null || true)
+PostUp = iptables -I INPUT 1 -p udp -m multiport --dports 53,443,51820 -j ACCEPT; iptables -t nat -A PREROUTING -p udp -m multiport --dports 53,443 -j REDIRECT --to-ports 51820 2>/dev/null || true; iptables -I FORWARD 1 -i %i -j ACCEPT; iptables -I FORWARD 1 -o %i -m state --state RELATED,ESTABLISHED -j ACCEPT; iptables -t nat -A POSTROUTING -o ${ethInterface} -j MASQUERADE; iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu; ip6tables -I INPUT 1 -p udp -m multiport --dports 53,443,51820 -j ACCEPT 2>/dev/null || true; ip6tables -I FORWARD 1 -i %i -j ACCEPT 2>/dev/null || true; ip6tables -I FORWARD 1 -o %i -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true; ip6tables -t nat -A POSTROUTING -o ${ethInterface} -j MASQUERADE 2>/dev/null || true; ip6tables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true; (command -v ufw >/dev/null && ufw route allow in on ${ifaceName} 2>/dev/null || true)
+PostDown = iptables -D INPUT -p udp -m multiport --dports 53,443,51820 -j ACCEPT 2>/dev/null || true; iptables -t nat -D PREROUTING -p udp -m multiport --dports 53,443 -j REDIRECT --to-ports 51820 2>/dev/null || true; iptables -D FORWARD -i %i -j ACCEPT 2>/dev/null || true; iptables -D FORWARD -o %i -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true; iptables -t nat -D POSTROUTING -o ${ethInterface} -j MASQUERADE 2>/dev/null || true; iptables -t mangle -D FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true; ip6tables -D INPUT -p udp -m multiport --dports 53,443,51820 -j ACCEPT 2>/dev/null || true; ip6tables -D FORWARD -i %i -j ACCEPT 2>/dev/null || true; ip6tables -D FORWARD -o %i -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true; ip6tables -t nat -D POSTROUTING -o ${ethInterface} -j MASQUERADE 2>/dev/null || true; ip6tables -t mangle -D FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true; (command -v ufw >/dev/null && ufw route delete allow in on ${ifaceName} 2>/dev/null || true)
 ${obfuscationBlock}
 
 [Peer]
 PublicKey = ${clientKeys.publicKey}
-AllowedIPs = 10.0.0.2/32
+AllowedIPs = 10.0.0.2/32, fd00:polaris::2/128
 `;
 
         res = await sshExec(conn, `sudo mkdir -p ${configDir} && cat << 'EOF' > /tmp/${ifaceName}.conf\n${serverConf}\nEOF\nsudo mv /tmp/${ifaceName}.conf ${configDir}/${ifaceName}.conf && sudo chmod 600 ${configDir}/${ifaceName}.conf`);
@@ -158,52 +160,77 @@ AllowedIPs = 10.0.0.2/32
         res = await sshExec(conn, `sudo systemctl stop ${quickCmd}@${ifaceName} 2>/dev/null || true; sudo systemctl start ${quickCmd}@${ifaceName} && sudo systemctl enable ${quickCmd}@${ifaceName}`);
         if (res.code !== 0) throw new Error(`Starting tunnel failed: ${res.stderr}`);
 
-        // Step 5b: Configure Unbound DNS
-        onProgress('Configuring Unbound Zero-Log DNS...');
+        // Step 5b: Configure Unbound Zero-Log Ad-Blocking DNS
+        onProgress('Configuring Unbound Zero-Log DNS with built-in AdBlock...');
         const unboundConf = `server:
     interface: 10.0.0.1
+    interface: fd00:polaris::1
     access-control: 10.0.0.0/24 allow
+    access-control: fd00:polaris::0/64 allow
     hide-identity: yes
     hide-version: yes
     use-caps-for-id: yes
     prefetch: yes
 `;
-        res = await sshExec(conn, `cat << 'EOF' > /tmp/polaris-dns.conf\n${unboundConf}\nEOF\nsudo mkdir -p /etc/unbound/unbound.conf.d && sudo mv /tmp/polaris-dns.conf /etc/unbound/unbound.conf.d/polaris-dns.conf && sudo systemctl restart unbound 2>/dev/null || true; sudo systemctl enable unbound 2>/dev/null || true`);
+        res = await sshExec(conn, `cat << 'EOF' > /tmp/polaris-dns.conf\n${unboundConf}\nEOF\nsudo mkdir -p /etc/unbound/unbound.conf.d && sudo mv /tmp/polaris-dns.conf /etc/unbound/unbound.conf.d/polaris-dns.conf`);
+
+        // Install AdBlock list for Unbound
+        const adblockSetup = `
+cat << 'EOF' > /tmp/polaris-adblock.conf
+server:
+    local-zone: "doubleclick.net" static
+    local-zone: "googleadservices.com" static
+    local-zone: "googlesyndication.com" static
+    local-zone: "adnxs.com" static
+    local-zone: "advertising.com" static
+    local-zone: "scorecardresearch.com" static
+    local-zone: "analytics.yahoo.com" static
+    local-zone: "telemetry.mozilla.org" static
+EOF
+sudo mv /tmp/polaris-adblock.conf /etc/unbound/unbound.conf.d/adblock.conf
+sudo systemctl restart unbound 2>/dev/null || true
+sudo systemctl enable unbound 2>/dev/null || true
+`;
+        await sshExec(conn, adblockSetup);
 
         // Step 5c: Start Fail2Ban if available
         onProgress('Configuring Fail2Ban SSH protection...');
         await sshExec(conn, 'sudo systemctl enable fail2ban 2>/dev/null && sudo systemctl restart fail2ban 2>/dev/null || true');
 
         // Step 6: Configure Firewall (UFW or firewalld)
-        onProgress('Configuring firewall rules...');
+        onProgress('Configuring firewall rules for multi-port bypass (53, 443, 51820)...');
         await sshExec(conn, `
 if command -v ufw >/dev/null 2>&1; then
   sudo ufw allow 51820/udp 2>/dev/null || true
+  sudo ufw allow 53/udp 2>/dev/null || true
+  sudo ufw allow 443/udp 2>/dev/null || true
   sudo ufw allow 22/tcp 2>/dev/null || true
   echo "y" | sudo ufw enable 2>/dev/null || true
 elif command -v firewall-cmd >/dev/null 2>&1; then
   sudo firewall-cmd --add-port=51820/udp --permanent 2>/dev/null || true
+  sudo firewall-cmd --add-port=53/udp --permanent 2>/dev/null || true
+  sudo firewall-cmd --add-port=443/udp --permanent 2>/dev/null || true
   sudo firewall-cmd --add-service=ssh --permanent 2>/dev/null || true
   sudo firewall-cmd --add-masquerade --permanent 2>/dev/null || true
   sudo firewall-cmd --reload 2>/dev/null || true
 fi
-# Ensure iptables does not block UDP 51820 on Oracle Cloud
-sudo iptables -I INPUT 1 -p udp --dport 51820 -j ACCEPT 2>/dev/null || true
+# Ensure iptables does not block UDP 51820/53/443 on Oracle Cloud
+sudo iptables -I INPUT 1 -p udp -m multiport --dports 53,443,51820 -j ACCEPT 2>/dev/null || true
 `);
 
-        // Step 7: Write client config locally
-        onProgress('Saving local client configuration...');
+        // Step 7: Write client config locally with Full-Tunnel IPv4 + IPv6 leak protection
+        onProgress('Saving local client configuration (Full-Tunnel IPv4+IPv6)...');
         const clientConf = `[Interface]
 PrivateKey = ${clientKeys.privateKey}
-Address = 10.0.0.2/24
-DNS = 10.0.0.1
+Address = 10.0.0.2/24, fd00:polaris::2/64
+DNS = 10.0.0.1, fd00:polaris::1
 MTU = 1420
 ${obfuscationBlock}
 
 [Peer]
 PublicKey = ${serverKeys.publicKey}
 Endpoint = ${host}:51820
-AllowedIPs = 0.0.0.0/0
+AllowedIPs = 0.0.0.0/0, ::/0
 PersistentKeepalive = 25
 `;
 
