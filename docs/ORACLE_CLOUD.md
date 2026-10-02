@@ -1,56 +1,85 @@
-# Oracle Cloud "Always Free" VPS Guide
+# Setting Up Oracle Cloud Always Free VPS
 
-Oracle Cloud offers the most generous free tier in the cloud computing market, making it the perfect companion for a self-hosted Polaris VPN.
+Oracle Cloud offers one of the best free tiers anywhere: up to **4 ARM cores, 24 GB of RAM, and 10 TB/month of outbound data** at zero cost. That makes it hands-down the best place to host your own personal WireGuard server.
 
-This guide will walk you through exactly how to set up an Oracle ARM instance, configure the firewall, and prepare it for Polaris.
+Here is the straightforward guide to getting your free instance running and ready for Polaris in about 5 minutes.
 
-## 1. Sign Up for Oracle Cloud
+---
 
-1. Go to [Oracle Cloud Free Tier](https://www.oracle.com/cloud/free/) and sign up.
-2. You will need to provide a credit/debit card for verification. **You will not be charged.** Oracle requires this to prevent spam.
-3. Select your **Home Region** carefully. You cannot change this later without deleting your account. Pick the region geographically closest to you for the lowest latency.
-   - *Example: If you are in South Asia, pick Mumbai or Hyderabad. If you are in Southeast Asia, pick Singapore.*
+## 1. Sign Up for Oracle Cloud Free Tier
 
-## 2. Create the Compute Instance
+1. Head over to [oracle.com/cloud/free](https://www.oracle.com/cloud/free/) and click **Start for free**.
+2. Fill in your details. You'll need to provide a credit or debit card for identity verification. **You will not be billed**—it places a temporary $1 authorization hold that drops off.
+3. **Pick your Home Region carefully**: Choose the data center geographically closest to you (e.g. Frankfurt, Singapore, Ashburn, Mumbai, London). Low geographic latency gives you the fastest VPN speeds. You cannot change your home region later without recreating the account.
 
-1. From the Oracle Cloud Dashboard, click **Create a VM instance**.
-2. **Name**: `polaris-vpn` (or whatever you prefer).
-3. **Placement**: Leave as default (AD-1).
-4. **Image and Shape**:
-   - Click **Edit**.
-   - **Image**: Select **Ubuntu** (Recommend version 22.04 or newer).
-   - **Shape**: Select **Ampere (ARM)** (`VM.Standard.A1.Flex`).
-   - Configure the shape to use **2 OCPUs** and **12 GB RAM**. (You are allowed up to 4 OCPUs and 24 GB RAM for free, but 2 OCPUs is more than enough for a VPN).
+---
+
+## 2. Launch Your Compute Instance
+
+Once you're in the Oracle Cloud Console:
+
+1. From the main menu, go to **Compute** → **Instances**, then click **Create Instance**.
+2. **Name**: Name it something simple like `polaris-vpn`.
+3. **Placement**: Leave the default Availability Domain (e.g. `AD-1`).
+4. **Image and Shape**: Click **Edit**:
+   - **Image**: Select **Ubuntu 22.04 LTS** (or **Ubuntu 24.04** / **Oracle Linux 9**).
+   - **Shape**: Click **Change Shape**, choose **Ampere (ARM-based Processor)**, and select `VM.Standard.A1.Flex`.
+   - Allocate your resources: **2 OCPUs** and **12 GB RAM** is more than enough for a blistering-fast VPN (and leaves you quota to run another free VM later if you want).
 5. **Networking**:
-   - Leave the default VCN settings.
-   - Ensure **Assign a public IPv4 address** is checked.
-6. **Add SSH keys**:
+   - Keep the default Virtual Cloud Network (VCN) and subnet.
+   - Make sure **Assign a public IPv4 address** is checked.
+6. **SSH Keys**:
    - Select **Generate a key pair for me**.
-   - Click **Save private key**. Keep this `.key` file safe! You will need it to connect.
-7. Click **Create** at the bottom of the page. Your instance will take about 2-3 minutes to provision.
+   - Click **Save private key** to download your `.key` file. Save it somewhere you can find it (e.g., `~/.ssh/oracle-vpn.key`).
+7. Click **Create** at the bottom. The instance will take about 1 to 2 minutes to show a green status (`RUNNING`).
 
-## 3. Configure the Virtual Cloud Network (VCN) Firewall
+---
 
-By default, Oracle Cloud blocks all incoming traffic except SSH (Port 22). WireGuard (and AmneziaWG) requires UDP port 51820 to be open.
+## 3. Open the Firewall (Crucial Step)
 
-1. On your instance details page, look for the **Primary VNIC** section and click on the **Subnet** link (e.g., `subnet-xxxx`).
-2. Under **Security Lists**, click the Default Security List.
-3. Click **Add Ingress Rules**.
-4. Configure the rule as follows:
-   - **Source Type**: CIDR
+By default, Oracle's cloud network blocks all incoming traffic except SSH (port 22). WireGuard needs **UDP port 51820** to receive tunnel handshakes.
+
+1. On your instance details page, scroll down to the **Instance Access** or **Primary VNIC** section and click the link under **Subnet** (e.g., `Public Subnet-xxxx`).
+2. Click **Default Security List for...**.
+3. Under **Ingress Rules**, click **Add Ingress Rules**.
+4. Enter the following:
+   - **Source Type**: `CIDR`
    - **Source CIDR**: `0.0.0.0/0`
-   - **IP Protocol**: UDP
+   - **IP Protocol**: `UDP`
    - **Destination Port Range**: `51820`
-   - **Description**: Allow WireGuard/AmneziaWG
+   - **Description**: `Allow WireGuard / AmneziaWG`
 5. Click **Add Ingress Rules**.
 
-*(Note: If you plan to use the SSH SOCKS5 proxy instead of WireGuard, you don't need to open port 51820, as SSH uses port 22 which is already open).*
+*(Note: Polaris's deploy script also adds host-level iptables rules on the VPS itself, so you don't need to fiddle with `iptables` manually).*
 
-## 4. Get Ready for Polaris
+---
 
-1. Go back to your **Instance Details** page.
-2. Note down the **Public IP Address** (e.g., `123.45.67.89`).
-3. Note the default username for Ubuntu images is always `ubuntu`.
-4. Locate the private key you downloaded in Step 2.6 (e.g., `ssh-key-2026-07-12.key`).
+## 4. Deploy Polaris
 
-You are now ready to deploy Polaris! Head back to the [Full Setup Guide](./SETUP.md) and run the `polaris deploy` command with your new Oracle IP and SSH key.
+Now copy your server's **Public IP address** from the Oracle Console.
+
+Open your local terminal and test your SSH connection:
+
+```bash
+# Make sure your key has correct permissions
+chmod 600 ~/.ssh/oracle-vpn.key
+
+# Deploy Polaris to your Oracle instance
+polaris deploy -s ubuntu@<YOUR_PUBLIC_IP> -i ~/.ssh/oracle-vpn.key
+```
+
+If you want stealth mode enabled (AmneziaWG to bypass restrictive DPI firewalls):
+
+```bash
+polaris deploy -s ubuntu@<YOUR_PUBLIC_IP> -i ~/.ssh/oracle-vpn.key -m amneziawg
+```
+
+Polaris will configure the kernel modules, set up BBR acceleration, configure Unbound DNS + AdBlock, and save your client config.
+
+Once done, connect with:
+
+```bash
+polaris start
+```
+
+That's it—you're running a private, dedicated, zero-log VPN on a 10 TB/month pipe for free.

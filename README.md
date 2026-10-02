@@ -1,199 +1,227 @@
 <h1 align="center">Polaris VPN</h1>
 
 <p align="center">
-  <b>Command Your Digital Privacy. A Production-Grade Self-Hosted VPN CLI & Terminal UI.</b>
+  <b>A self-hosted VPN CLI & terminal dashboard. Fast WireGuard & stealth tunnels on any VPS.</b>
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/polaris-vpn"><img src="https://img.shields.io/npm/v/polaris-vpn?style=for-the-badge&logo=npm&logoColor=white&color=88c0d0" alt="NPM Version" /></a>
-  <a href="https://www.npmjs.com/package/polaris-vpn"><img src="https://img.shields.io/npm/dt/polaris-vpn?style=for-the-badge&logo=npm&logoColor=white&color=a3be8c" alt="Total Downloads" /></a>
-  <a href="https://www.npmjs.com/package/polaris-vpn"><img src="https://img.shields.io/npm/dm/polaris-vpn?style=for-the-badge&logo=npm&logoColor=white&color=ebcb8b" alt="Monthly Downloads" /></a>
-  <a href="https://github.com/Divyo/polaris-vpn"><img src="https://img.shields.io/github/stars/Divyo/polaris-vpn?style=for-the-badge&logo=github&logoColor=white&color=bf616a" alt="GitHub Stars" /></a>
-  <a href="https://github.com/Divyo/polaris-vpn/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-5e81ac?style=for-the-badge&logo=apache&logoColor=white" alt="License" /></a>
+  <a href="https://www.npmjs.com/package/polaris-vpn"><img src="https://img.shields.io/npm/v/polaris-vpn?style=flat-square&color=88c0d0" alt="NPM Version" /></a>
+  <a href="https://www.npmjs.com/package/polaris-vpn"><img src="https://img.shields.io/npm/dt/polaris-vpn?style=flat-square&color=a3be8c" alt="Downloads" /></a>
+  <a href="https://github.com/Divyo/polaris-vpn/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-5e81ac?style=flat-square" alt="License" /></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square" alt="Node Version" />
 </p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Security_Audit-0_Vulnerabilities-a3be8c?style=for-the-badge&logo=shieldsdotio&logoColor=white" alt="Security Audit" />
-  <img src="https://img.shields.io/badge/Node.js-%3E%3D_18.0.0-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node Version" />
-  <img src="https://img.shields.io/badge/Platforms-macOS_%7C_Linux_%7C_Windows-0078D6?style=for-the-badge&logo=apple&logoColor=white" alt="Platforms" />
-</p>
-
-<br />
-
-Polaris VPN is a self-hosted VPN manager and Terminal User Interface (TUI) engineered for developers, privacy enthusiasts, and sysadmins. Provision an enterprise-grade WireGuard or Stealth AmneziaWG VPN server on any fresh Linux cloud server in under 60 seconds.
 
 ---
 
-## Technical Performance & Metrics
+Commercial VPNs charge $5–15 a month, share the same IPs among thousands of people (meaning constant Cloudflare CAPTCHAs and streaming blocks), and ask you to take their "zero-log" marketing on faith.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Provisioning_Speed-%3C_60_Seconds-88c0d0?style=flat-square&logo=fastly&logoColor=white" alt="Deploy Time" />
-  <img src="https://img.shields.io/badge/Protocols-WireGuard_%7C_AmneziaWG_%7C_TLS_%7C_SSH-b48ead?style=flat-square&logo=wireguard&logoColor=white" alt="Protocols" />
-  <img src="https://img.shields.io/badge/DNS_Leak_Protection-Auto--DoH_127.0.0.1%3A5354-a3be8c?style=flat-square&logo=cloudflare&logoColor=white" alt="DNS Protection" />
-  <img src="https://img.shields.io/badge/Telemetry-0_Logs_%7C_0_Tracking-bf616a?style=flat-square&logo=gnupg&logoColor=white" alt="Zero Telemetry" />
-  <img src="https://img.shields.io/badge/Infrastructure-Oracle_Always_Free_Tier-ebcb8b?style=flat-square&logo=oracle&logoColor=white" alt="Infrastructure" />
-</p>
+**Polaris** gives you your own private VPN. It takes a fresh Linux server—on Oracle Cloud, AWS, DigitalOcean, Hetzner, or a home box—and configures everything for you in under a minute: WireGuard kernel modules, BBR congestion control, stealth handshake obfuscation (AmneziaWG), Unbound zero-log DNS, and ad-blocking.
 
-| Performance Metric | Benchmark Standard | Polaris Architecture Implementation |
-| :--- | :--- | :--- |
-| **Server Setup Time** | `< 60 Seconds` | Automated automated Ansible-free shell orchestration |
-| **DNS Leak Rating** | `0% Leak Ratio` | Local DNS-over-HTTPS (DoH) resolver bound to `127.0.0.1:5354` |
-| **Protocol Redundancy** | `4 Tier Fallback` | Automatic protocol failover: `WireGuard` -> `AmneziaWG` -> `TLS` -> `SSH` |
-| **Security Surface** | `0 Vulnerabilities` | Clean security audit, dependency graph lockdown, no native exploits |
-| **Split Tunneling** | `Sub-millisecond` | Kernel-level routing & domain bypass rules via `polaris bypass` |
-| **Mobile Access** | `Instant Sync` | Terminal-rendered vector QR codes via `polaris peer qr` |
+You get a clean, dedicated IP, paid-grade speed, and total ownership over your traffic.
 
 ---
 
-## Core Capabilities
+## What It Does
 
-### Automated VPS Provisioning
-Deploy an isolated VPN node on Ubuntu, Debian, or Fedora Linux servers with a single command. Handles WireGuard kernel modules, iptables firewall, and Unbound zero-log DNS configuration automatically.
-
-### Live Terminal Dashboard (TUI)
-Full-screen interactive terminal interface built with keyboard navigation (`Nord` design system). Provides live Rx/Tx bandwidth graphs, latency benchmarks, and active peer management.
-
-### Auto-DoH & DNS Leak Safeguard
-Binds system DNS on macOS and Linux to a local DoH resolver (`127.0.0.1:5354`) upon tunnel activation. Ensures DNS requests never leak to local ISPs and automatically backs up/restores original system resolver configurations upon teardown.
-
-### Deep Packet Inspection (DPI) Stealth Mode
-Integrates AmneziaWG obfuscation parameters (`Jc`, `Jmin`, `Jmax`, `S1`, `S2`, `H1`-`H4`) to randomize packet headers and payload sizes, enabling operation across restricted networks and DPI firewalls.
-
-### Server Latency Benchmark & Auto-Selection
-Measure ICMP ping and TCP handshake response times across saved profiles. The `--fastest` flag benchmarks endpoints and connects to the lowest-latency node automatically.
+- **One-command deployment**: Provisions any clean Ubuntu, Debian, Oracle Linux, Rocky, or Fedora VPS over SSH in ~60 seconds.
+- **DPI-resistant (AmneziaWG)**: Randomizes packet headers and sizes to glide right through strict firewalls and deep-packet inspection (DPI) that block vanilla WireGuard.
+- **WireGuard + BBR**: Enables Google's BBR congestion control, PMTU MSS clamping, and tuned socket buffers on the server for maximum download throughput.
+- **Zero-log DNS + AdBlock**: Automatically sets up Unbound on the server (`10.0.0.1`) so DNS lookups never touch Google or Cloudflare. Includes built-in tracker and ad domain blocking.
+- **Full IPv6 & kill-switch**: Dual-stack IPv6 routing with firewall kill-switch rules (`pf` on macOS, `iptables` on Linux) to prevent leaks if the tunnel drops.
+- **Watchdog auto-heal**: Background gateway heartbeat monitor that catches packet loss and quietly restarts the tunnel before you notice.
+- **Terminal UI & QR codes**: Keyboard-driven TUI dashboard, built-in speedtest benchmark, and instant vector QR codes for iPhone and Android.
 
 ---
 
-## Installation
+## Quick Install
 
-Install globally via npm (Node.js 18.0.0 or higher required):
+Requires **Node.js 18 or higher** on your local machine:
 
 ```bash
 npm install -g polaris-vpn
 ```
 
-Verify installation:
+Run the built-in diagnostic wizard to check your environment:
 
 ```bash
-polaris --version
+polaris setup
 ```
 
 ---
 
-## Quick Start Guide
+## 3-Minute Setup
 
-### 1. Provision a Server
-Deploy WireGuard or Stealth AmneziaWG on a fresh cloud instance:
+### 1. Grab a server
+If you don't already have a VPS, Oracle Cloud offers 4 ARM cores, 24 GB RAM, and 10 TB/month of egress bandwidth completely free forever.
 
-```bash
-polaris deploy --server root@1.2.3.4 --mode amneziawg
-```
+👉 **[Step-by-step Oracle Free Tier Guide](./docs/ORACLE_CLOUD.md)**
 
-### 2. Connect to Your Server
-Connect with automatic DNS leak protection and DoH resolver initialization:
+*(Any other cloud provider like AWS Lightsail, DigitalOcean $4 droplet, or Hetzner works just as well).*
 
-```bash
-polaris start --server root@1.2.3.4
-```
-
-### 3. Save & Auto-Select Lowest Latency Node
-Save server profiles for instant zero-arg connection or lowest-latency routing:
+### 2. Deploy your VPN
+Point Polaris to your fresh server:
 
 ```bash
-polaris add my-server --server root@1.2.3.4
-polaris start --fastest
+polaris deploy -s ubuntu@1.2.3.4
 ```
 
----
+Want stealth mode to bypass restrictive school, office, or country firewalls? Pass `--mode amneziawg`:
 
-## Master Terminal Dashboard
+```bash
+polaris deploy -s ubuntu@1.2.3.4 -m amneziawg
+```
 
-Launch the interactive Terminal User Interface:
+Polaris handles SSH authentication, installs packages, sets up sysctl performance tweaks, generates cryptographic keys, and writes your local client config.
+
+### 3. Connect
+
+```bash
+polaris start
+```
+
+Or just type `polaris` to open the full interactive terminal dashboard:
 
 ```bash
 polaris
 ```
 
-<pre>
-+-----------------------------------------------------------------------------+
-|  POLARIS VPN  v1.2.3                       Command your digital privacy.    |
-+--------------------------+--------------------------------------------------+
-| (o) Home                 | (o) Tunnel Status    [*] ACTIVE                  |
-| (s) Servers              | ------------------------------------------------ |
-| (>) Quick Connect        | Server   ubuntu@1.2.3.4                           |
-| (m) Live Monitor         | Mode     AMNEZIAWG                               |
-| -----------------------  | Latency  24 ms                                   |
-| (p) Peers                | Data v   142.5 MB                                |
-| (c) Privacy Check        | Data ^   18.2 MB                                 |
-| (d) Deploy VPS           | ------------------------------------------------ |
-| -----------------------  | [^/v] Navigate  [Enter] Select  [Esc/h] Home     |
-+--------------------------+--------------------------------------------------+
-</pre>
+---
 
-### Navigation Shortcuts
+## Terminal Dashboard (TUI)
 
-| Key Binding | Action |
-| :--- | :--- |
-| `↑ / ↓` or `k / j` | Navigate sidebar items and server lists |
-| `Enter` | Activate highlighted menu item or confirm connection |
-| `Esc` or `h` or `m` | Return to Main Menu / Home from any view or error screen |
-| `b` | Launch live server latency benchmark rankings |
-| `r` | Refresh WireGuard peer data |
-| `1 - 7` | Direct numerical jump to main views |
-| `q` or `Ctrl+C` | Quit Polaris VPN |
+Typing `polaris` with no arguments launches the terminal dashboard:
+
+```
+  POLARIS — Leave no trace.
+  Your True North in Digital Privacy.
+
+  ┌──── DISCONNECTED ────┐┌── ◆ HOME ──────────────────────────────────┐
+  │  ○ [DISCONNECTED]    ││                                            │
+  │  No active tunnel    ││  ◆ Welcome to Polaris VPN                  │
+  │                      ││  ────────────────────────────────────────  │
+  │  ◆ Home              ││                                            │
+  │  ⚙ Servers           ││    ○ No active tunnel running.             │
+  │  ▶ Quick Connect     ││                                            │
+  │  ⚡ Speed Test        ││    Saved Profiles:                         │
+  │  ◉ Live Monitor      ││    1. oracle-fra   ubuntu@1.2.3.4  [fast]  │
+  │  ──────────────────  ││                                            │
+  │  ≡ Peers             ││    Press [Enter] on Quick Connect to run.  │
+  │  ✦ Privacy Check     ││    Press [4] to run a live speedtest.      │
+  │  ♥ Watchdog          ││                                            │
+  │  ⊕ Deploy VPS        ││                                            │
+  │  ──────────────────  ││                                            │
+  │  ■ Disconnect        ││                                            │
+  └──────────────────────┘└────────────────────────────────────────────┘
+   [Tab / ↑↓] Navigate   [Enter] Select   [?] Help   [q] Quit
+```
+
+### Keyboard Shortcuts
+- `1` – `9`: Instant jump to any tab (Home, Servers, Quick Connect, Speedtest, Monitor, Peers, Check, Watchdog, Deploy)
+- `Tab` / `Shift+Tab` or `↑` / `↓`: Move selection
+- `Enter`: Select / Connect
+- `?`: Toggle help screen
+- `q`: Quit
 
 ---
 
-## Complete Command Matrix
+## Daily Usage
 
-| Command | Category | Functional Description |
-| :--- | :--- | :--- |
-| `polaris deploy` | Server | Provision Linux VPS with WireGuard/AmneziaWG in under 60 seconds |
-| `polaris start` | Connection | Establish VPN tunnel with Auto-DoH DNS leak protection |
-| `polaris start --fastest` | Connection | Benchmark saved endpoints and connect to lowest latency node |
-| `polaris start --failover` | Connection | Connect with automatic multi-protocol fallback |
-| `polaris stop` | Connection | Disconnect tunnel and restore original system DNS settings |
-| `polaris benchmark` | Diagnostics | Rank saved server profiles by ping and TCP handshake speed |
-| `polaris bypass add <target>` | Network | Add domain or IP subnet to split-tunneling bypass rules |
-| `polaris bypass list` | Network | Display active split-tunneling bypass rules |
-| `polaris import <file.conf>` | Profile | Import WireGuard or AmneziaWG `.conf` file |
-| `polaris export <alias>` | Profile | Export profile config or display terminal QR code |
-| `polaris dashboard` | Interface | Launch interactive Live Monitor TUI |
-| `polaris status --full` | Status | Output connection state, GeoIP location, and rx/tx transfer |
-| `polaris peer add <name>` | Access | Provision new peer config for additional devices |
-| `polaris peer qr <name>` | Access | Render vector QR code in terminal for mobile setup |
-| `polaris check` | Privacy | Run 3-point privacy audit (IP, DNS leak, IPv6 exposure) |
+### Connection Management
+```bash
+# Connect to your default server
+polaris start
 
-*(All commands support the `--json` flag for integration scripts and CI/CD pipelines)*
+# Connect to the lowest-latency server in your list
+polaris start --fastest
+
+# Disconnect cleanly and restore your original network DNS
+polaris stop
+
+# Check current connection, IP address, and transfer stats
+polaris status --full
+```
+
+### Server Profiles
+```bash
+# Save a server profile
+polaris add my-vps -s ubuntu@1.2.3.4 -t work
+
+# List saved servers
+polaris list
+
+# Switch your active default server
+polaris use my-vps
+
+# Measure ping and latency across all your servers
+polaris benchmark
+
+# Delete a server profile
+polaris rm my-vps
+```
+
+### Mobile Devices & Multi-Device
+Want WireGuard on your iPhone, iPad, or Android phone?
+
+```bash
+# Create a new peer config for your phone
+polaris peer add my-phone
+
+# Render a vector QR code in your terminal
+polaris peer qr my-phone
+```
+
+Open the WireGuard (or AmneziaWG) app on your phone, tap **+** → **Scan QR Code**, and you're done.
+
+### Speed Test & Health Checks
+```bash
+# Benchmark actual download throughput and ping through the VPN
+polaris speedtest
+
+# Test for IP, DNS, IPv6, and WebRTC leaks
+polaris check
+
+# Run a one-time watchdog heartbeat test to verify gateway ping
+polaris watchdog check
+```
+
+### Split Tunneling (Bypass Rules)
+Need local LAN devices or specific sites to bypass the VPN tunnel?
+
+```bash
+polaris bypass add 192.168.1.0/24
+polaris bypass add netflix.com
+polaris bypass list
+```
 
 ---
 
-## Infrastructure: Oracle Cloud Always Free Tier
+## Shell Tab-Completion
 
-Polaris VPN is optimized for the **Oracle Cloud Always Free Tier**:
+Polaris supports native tab-completion for **bash**, **zsh**, and **fish**. It autocompletes subcommands, flags, and even your saved server aliases (`polaris use <Tab>`):
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Instance-Ampere_A1_Compute-000000?style=flat-square&logo=oracle&logoColor=white" />
-  <img src="https://img.shields.io/badge/Resources-4_OCPU_%7C_24_GB_RAM-88c0d0?style=flat-square&logo=cpu&logoColor=white" />
-  <img src="https://img.shields.io/badge/Bandwidth-10_TB_/_Month-a3be8c?style=flat-square&logo=datacamp&logoColor=white" />
-</p>
+```bash
+# Zsh (add to ~/.zshrc)
+eval "$(polaris completion zsh)"
 
-- **Zero Cost**: 4 OCPUs and 24 GB RAM free forever.
-- **High Throughput**: 10 TB outbound data transfer per month.
-- **Total Ownership**: No commercial VPN providers logging or monetizing your traffic.
+# Bash (add to ~/.bashrc)
+eval "$(polaris completion bash)"
 
----
-
-## Trust Architecture & Security Posture
-
-- **Zero Telemetry**: No tracking, no crash reports, no central authentication servers.
-- **Local Key Generation**: Cryptographic key pairs generated locally via OS entropy source.
-- **Native OS Kill-Switch**: Binds firewall rules (`pf` on macOS, `iptables` on Linux) to block unencrypted leak vectors.
-- **Audit Verification**: Clean dependency graph with zero vulnerability alerts (`npm audit` verified).
-- **Open Source**: Licensed under Apache 2.0.
+# Fish (run once)
+polaris completion fish | source
+```
 
 ---
 
-<p align="center">
-  <i>Engineered for total digital sovereignty.</i>
-</p>
+## Architecture & Security
+
+- **Zero Logs**: The installer sets up Unbound directly on the VPS with `verbosity: 0` and disabled query logging. Your DNS lookups resolve directly against root servers rather than logging aggregators.
+- **Built-in Ad-blocking**: A curated DNS sinkhole config (`adblock.conf`) runs directly inside Unbound on the server, killing tracking domains and ads at the resolver level before they hit your browser.
+- **Cloud Firewall Ingress**: On cloud providers like Oracle Cloud that include strict host-level rejection chains, Polaris inserts its iptables rules at rule index 1 (`iptables -I INPUT 1 ...`) so WireGuard traffic is accepted cleanly without fighting host firewall templates.
+- **Multi-Port Redirection**: On the VPS, UDP port 53 and 443 redirect internally to WireGuard port 51820. If a public Wi-Fi or hotel network blocks non-standard UDP ports, you can connect over ports that networks always leave open.
+- **Accessibility & NO_COLOR**: Respects `process.env.NO_COLOR` per the `no-color.org` standard, using dual text+symbol cues (`[CONNECTED] (✓)`) for full usability with screen readers and color-blind profiles.
+
+---
+
+## License
+
+Apache 2.0. Do whatever you like with it—run it, fork it, improve it.

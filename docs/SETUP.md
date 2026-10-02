@@ -1,128 +1,178 @@
-# Full Step-by-Step Setup Guide
+# Step-by-Step Setup Guide
 
-Welcome to Polaris VPN! This guide will take you from scratch to having a fully functional, DPI-resistant self-hosted VPN.
+This guide walks you through setting up Polaris VPN from scratch. By the end, you'll have your own high-speed WireGuard (or stealth AmneziaWG) VPN running on a private server with ad-blocking and zero DNS leaks.
 
-## 1. Prepare a Virtual Private Server (VPS)
+---
 
-Polaris needs a Linux server (Ubuntu/Debian recommended) to host the VPN.
-If you don't already have one, you can easily get a powerful one for **free forever**.
+## Prerequisites
 
-👉 **[Click here for the Oracle Cloud Free Tier Guide](./ORACLE_CLOUD.md)**
+Before starting, you only need two things:
 
-*Once you have your server's Public IP address and SSH Private Key, continue to Step 2.*
+1. **A Linux server (VPS)**: Any clean instance of Ubuntu (22.04 or 24.04), Debian (11 or 12), Oracle Linux (8 or 9), Rocky Linux, or Fedora. If you don't have one, Oracle Cloud gives you one [free forever](./ORACLE_CLOUD.md).
+2. **Node.js 18 or newer** installed on your laptop/computer.
 
-## 2. Install Polaris VPN
+---
 
-On your local machine (where you want to connect *from*), you need Node.js installed.
+## 1. Install Polaris CLI
 
-Install the Polaris CLI globally:
+On your laptop or desktop (where you'll be connecting from), install the CLI:
 
 ```bash
 npm install -g polaris-vpn
 ```
 
-## 3. Provision the Server
-
-You will now use Polaris to automatically install and configure the VPN on your new VPS.
-
-Run the `deploy` command. We highly recommend using the `amneziawg` mode to ensure your VPN traffic cannot be blocked by Deep Packet Inspection (DPI):
+Check that it's installed and verify your local system dependencies:
 
 ```bash
-polaris deploy --server ubuntu@<YOUR_SERVER_IP> --mode amneziawg
+polaris setup
 ```
 
-*Note: If you receive an SSH authentication error, you need to provide your SSH private key. By default, Polaris looks for `~/.ssh/id_rsa`. If your key is saved elsewhere (like the one downloaded from Oracle), you can use it like this:*
+The setup command will check if you have `wireguard-tools` (`wg-quick`) installed locally. If you're missing them, it will tell you the exact command to run:
+- **macOS**: `brew install wireguard-tools`
+- **Ubuntu/Debian**: `sudo apt install wireguard-tools`
+- **Arch**: `sudo pacman -S wireguard-tools`
+
+---
+
+## 2. Deploy Your Server
+
+Once your cloud VPS is running and you have its public IP and SSH access:
+
+### Option A: Standard WireGuard (Fastest, default)
+Best for general use, gaming, streaming, and everyday browsing with BBR acceleration:
 
 ```bash
-eval "$(ssh-agent -s)"
-ssh-add /path/to/your/oracle-ssh-key.key
-polaris deploy --server ubuntu@<YOUR_SERVER_IP> --mode amneziawg
+polaris deploy -s ubuntu@YOUR_SERVER_IP
 ```
 
-This process takes about 2-3 minutes. Polaris will install AmneziaWG, configure the stealth parameters, set up the kernel modules, and generate your local client configuration.
+### Option B: Stealth Mode (AmneziaWG)
+Recommended if you're on a restrictive network (work, university, hotel, or country firewalls) that detects and blocks standard WireGuard handshakes:
 
-## 4. Start the Tunnel
+```bash
+polaris deploy -s ubuntu@YOUR_SERVER_IP -m amneziawg
+```
 
-Once deployment is successful, you can connect to your new VPN!
+### Handling SSH Keys
+- Polaris automatically tries your default `~/.ssh/id_rsa` or `~/.ssh/id_ed25519`.
+- If you downloaded a specific key from your cloud provider (like Oracle Cloud):
+  ```bash
+  polaris deploy -s ubuntu@YOUR_SERVER_IP -i /path/to/private-key.key
+  ```
+- Or pass an SSH password if your VPS uses password auth:
+  ```bash
+  polaris deploy -s root@YOUR_SERVER_IP -p "your_password"
+  ```
 
-Run:
+Deployment takes about 60 to 90 seconds. It automatically installs WireGuard kernel modules, configures BBR congestion control, sets up local Unbound zero-log DNS, activates ad-blocking, clamps MSS to prevent packet fragmentation, and downloads your ready-to-use client config.
+
+---
+
+## 3. Save as a Profile
+
+Give your server a friendly alias so you never have to remember its IP again:
+
+```bash
+polaris add my-vps -s ubuntu@YOUR_SERVER_IP -t home
+```
+
+---
+
+## 4. Connect to the VPN
+
+To connect from the command line:
 
 ```bash
 polaris start
 ```
 
-*Note: By default, `polaris start` automatically launches local DNS-over-HTTPS (`127.0.0.1:5354`) and binds system DNS to prevent ISP DNS leaks.*
-
-To automatically measure server ping latency and connect to the fastest available profile:
+Or open the interactive dashboard:
 
 ```bash
-polaris start --fastest
+polaris
 ```
 
-To verify everything is working and your IP has changed, run:
+Hit **Enter** on **Quick Connect** to start the tunnel.
+
+---
+
+## 5. Verify Your Connection
+
+Once connected, run a quick leak check:
 
 ```bash
 polaris check
 ```
 
-## 5. Enable Split Tunneling / Bypass Rules (Optional)
+This tests:
+1. **Public IP**: Confirms your outbound IP matches your VPS instead of your home ISP.
+2. **DNS Leak Test**: Confirms queries resolve through your in-tunnel Unbound resolver (`10.0.0.1`) rather than your local network provider.
+3. **IPv6 Leak Test**: Ensures IPv6 traffic routes through the encrypted tunnel (`fd00:polaris::`) without leaking outside.
+4. **WebRTC Protection**: Checks for browser-level IP disclosure.
 
-Want local LAN devices or specific streaming sites to bypass the VPN?
+You can also run a live throughput benchmark:
 
 ```bash
-# Add domain or IP subnet to bypass rules
-polaris bypass add netflix.com
+polaris speedtest
+```
+
+---
+
+## 6. Add Your Phone or Tablet
+
+Polaris can generate peer configs and display QR codes directly in your terminal:
+
+```bash
+# 1. Generate the peer on your VPS
+polaris peer add iphone
+
+# 2. Render a QR code in the terminal
+polaris peer qr iphone
+```
+
+1. Install the **WireGuard** app (or **AmneziaWG** app if using stealth mode) from the iOS App Store or Google Play.
+2. Tap **+** → **Scan from QR Code**.
+3. Name it (e.g. `polaris`) and toggle it on. Your phone is now routed through your private server.
+
+---
+
+## 7. Split Tunneling (Bypass Rules)
+
+If you have local devices (like a home NAS or printer) or specific websites you want to access directly outside the VPN:
+
+```bash
+# Bypass local network
 polaris bypass add 192.168.1.0/24
 
-# View active bypass rules
+# Bypass a specific domain
+polaris bypass add netflix.com
+
+# List current rules
 polaris bypass list
+
+# Remove a rule
+polaris bypass remove netflix.com
 ```
 
-## 6. Measure Server Latency (`polaris benchmark`)
+---
 
-If you have multiple saved profiles, rank them by ICMP ping and TCP handshake latency:
+## 8. Disconnecting
 
-```bash
-polaris benchmark
-```
-
-## 7. Import & Export Configuration Files
-
-Import third-party WireGuard / AmneziaWG `.conf` files (from providers like Mullvad, ProtonVPN, or custom servers):
-
-```bash
-polaris import ~/Downloads/mullvad-us.conf --alias mullvad-us
-```
-
-Export any saved profile to a `.conf` file or display a terminal QR code:
-
-```bash
-polaris export mullvad-us --out ./mullvad-us.conf
-```
-
-## 8. Connect Mobile Devices
-
-Want to use the VPN on your phone? Polaris can generate terminal QR codes!
-First, generate a new peer configuration on the server:
-
-```bash
-polaris peer add my-iphone
-```
-
-Then, display the QR code on your terminal:
-
-```bash
-polaris peer qr my-iphone
-```
-
-Download the **AmneziaWG** app on iOS or Android, tap the `+` button, select **Create from QR code**, and scan your screen!
-
-## 9. Stop the Tunnel
-
-When you are done, simply run:
+To stop the tunnel and revert your network settings back to default:
 
 ```bash
 polaris stop
 ```
 
-*(This automatically stops the tunnel, turns off Auto-DoH, and restores your original system DNS settings)*
+Polaris automatically restores your original DNS resolvers, turns off proxy settings, cleans up temporary routing rules, and closes the tunnel cleanly.
+
+---
+
+## Common Gotchas & Troubleshooting
+
+- **Connection times out / WireGuard doesn't respond**: Check your cloud provider's firewall or security list (e.g., Oracle VCN Security Lists, AWS Security Groups). UDP port `51820` must be allowed for ingress traffic.
+- **Port already in use**: If another process is using port 1080 (for SSH/SOCKS mode), run `polaris stop` or pass a different port with `polaris start -p 1085`.
+- **Root permissions**: Managing network interfaces requires `sudo` privileges. Make sure your user can run `sudo wg-quick`.
+- **Updating server packages**: To keep your VPS updated with the latest security patches for WireGuard, Unbound, and Fail2Ban:
+  ```bash
+  polaris update-server
+  ```
