@@ -32,7 +32,7 @@
   },
   "scripts": {
     "start": "node ./src/cli.js",
-    "test": "node --test"
+    "test": "node --test --test-concurrency=1"
   },
   "license": "Apache-2.0",
   "keywords": [

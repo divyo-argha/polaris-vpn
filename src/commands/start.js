@@ -181,21 +181,21 @@ export default async (options) => {
 
     const res = await startTunnel(server, port, actualMode, isJson);
     
-    // Auto-DoH & System DNS Protection
-    const enableDoh = options.doh !== false;
+    // DNS Protection: WireGuard uses server-side Unbound DNS (10.0.0.1); SSH/TLS can use local DoH
+    const isFullTunnel = actualMode === 'wireguard' || actualMode === 'amneziawg';
+    const enableDoh = !isFullTunnel && options.doh !== false;
     if (enableDoh) {
       try {
         if (!getDnsStatus()) {
           startDnsResolver(5354);
         }
-        setSystemDns(['127.0.0.1']);
       } catch (dnsErr) {}
     }
 
     // Apply Split Tunneling / Bypass Rules
     await applyBypassRules();
 
-    if (actualMode === 'wireguard' || actualMode === 'amneziawg') {
+    if (isFullTunnel) {
       if (!isJson) {
         spinner.text = 'Waiting for interface to configure...';
       }
@@ -208,9 +208,9 @@ export default async (options) => {
       
       if (!isJson) {
         spinner.stop();
-        printBox('Tunnel Connected 🚀', `Server: ${server}\nMode: ${actualMode.toUpperCase()}\nStatus: System-wide (All OS traffic)\nOld IP: ${oldIp}\nNew IP: ${newIp}\nDNS Protection: Auto-DoH Active (127.0.0.1)`, 'success');
+        printBox('Tunnel Connected 🚀', `Server: ${server}\nMode: ${actualMode.toUpperCase()}\nStatus: System-wide (All OS traffic)\nOld IP: ${oldIp}\nNew IP: ${newIp}\nDNS Protection: Zero-Log In-Tunnel (10.0.0.1 Unbound)`, 'success');
       } else {
-        console.log(JSON.stringify({ success: true, oldIp, newIp, mode: actualMode, pid: res.pid, doh: enableDoh }));
+        console.log(JSON.stringify({ success: true, oldIp, newIp, mode: actualMode, pid: res.pid, dns: '10.0.0.1' }));
       }
       logEvent('CONNECT', `Connected to ${server}`, { mode: actualMode, oldIp, newIp });
     } else {
@@ -221,7 +221,7 @@ export default async (options) => {
       
       if (!isJson) {
         spinner.stop();
-        printBox('Tunnel Connected 🚀', `Server: ${server}\nMode: ${actualMode.toUpperCase()}\nProxy: socks5://127.0.0.1:${port}\nOld IP: ${oldIp}\nNew IP: ${newIp}\nDNS Protection: Auto-DoH Active (127.0.0.1)`, 'success');
+        printBox('Tunnel Connected 🚀', `Server: ${server}\nMode: ${actualMode.toUpperCase()}\nProxy: socks5://127.0.0.1:${port}\nOld IP: ${oldIp}\nNew IP: ${newIp}\nDNS Protection: ${enableDoh ? 'Local DoH (127.0.0.1:5354)' : 'Standard'}`, 'success');
       } else {
         console.log(JSON.stringify({ success: true, oldIp, newIp, proxy: `socks5://127.0.0.1:${port}`, pid: res.pid, mode: actualMode, doh: enableDoh }));
       }

@@ -30,7 +30,12 @@ const sshConnect = (info) => {
   const username = parts.length > 1 ? parts[0] : 'ubuntu';
   const host = parts.length > 1 ? parts[1] : parts[0];
   
-  const privateKey = getDefaultPrivateKey();
+  let privateKey = null;
+  if (info.identity && fs.existsSync(info.identity)) {
+    privateKey = fs.readFileSync(info.identity);
+  } else {
+    privateKey = getDefaultPrivateKey();
+  }
 
   const conn = new Client();
   return new Promise((resolve, reject) => {
@@ -38,7 +43,7 @@ const sshConnect = (info) => {
         .on('error', (err) => reject(err));
     conn.connect({
       host,
-      port: 22,
+      port: info.port || 22,
       username,
       privateKey
     });

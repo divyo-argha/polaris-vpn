@@ -24,15 +24,21 @@ export default async (options) => {
   let serverStr = options.server;
   let mode = options.mode;
 
+  let deployInfo = null;
+  if (fs.existsSync(DEPLOY_JSON)) {
+    try {
+      deployInfo = JSON.parse(fs.readFileSync(DEPLOY_JSON, 'utf-8'));
+    } catch (e) {}
+  }
+
   if (!serverStr) {
-    if (!fs.existsSync(DEPLOY_JSON)) {
+    if (!deployInfo) {
       const msg = 'No deployed server found. Use --server <user@host> or deploy first with "polaris deploy".';
       if (isJson) console.log(JSON.stringify({ error: msg }));
       else printError(msg);
       process.exitCode = 1;
       return;
     }
-    const deployInfo = JSON.parse(fs.readFileSync(DEPLOY_JSON, 'utf-8'));
     serverStr = deployInfo.server;
     mode = mode || deployInfo.mode || 'wireguard';
   }
@@ -43,15 +49,16 @@ export default async (options) => {
   const isAwg = (mode || 'wireguard') === 'amneziawg';
 
   let privateKey = null;
-  if (options.identity) {
-    if (!fs.existsSync(options.identity)) {
-      const msg = `SSH identity file not found: ${options.identity}`;
+  const identityPath = options.identity || (deployInfo && deployInfo.identity);
+  if (identityPath) {
+    if (!fs.existsSync(identityPath)) {
+      const msg = `SSH identity file not found: ${identityPath}`;
       if (isJson) console.log(JSON.stringify({ error: msg }));
       else printError(msg);
       process.exitCode = 1;
       return;
     }
-    privateKey = fs.readFileSync(options.identity);
+    privateKey = fs.readFileSync(identityPath);
   } else {
     privateKey = getDefaultPrivateKey();
   }
@@ -74,7 +81,17 @@ export default async (options) => {
     await new Promise((resolve, reject) => {
       conn.on('ready', () => {
         const pkgName = isAwg ? 'amneziawg-dkms amneziawg-tools wireguard' : 'wireguard wireguard-tools';
-        const cmd = `sudo apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y ${pkgName} unbound fail2ban`;
+        const cmd = `
+if command -v apt-get >/dev/null 2>&1; then
+  sudo apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y ${pkgName} unbound fail2ban
+elif command -v dnf >/dev/null 2>&1; then
+  sudo dnf check-update || true && sudo dnf upgrade -y wireguard-tools unbound fail2ban
+elif command -v yum >/dev/null 2>&1; then
+  sudo yum check-update || true && sudo yum update -y wireguard-tools unbound fail2ban
+elif command -v pacman >/dev/null 2>&1; then
+  sudo pacman -Syu --noconfirm wireguard-tools unbound fail2ban
+fi
+`;
 
         if (spinner) spinner.text = 'Running package update on server (this may take a minute)...';
 
@@ -106,7 +123,7 @@ export default async (options) => {
         });
       }).on('error', reject);
 
-      conn.connect({ host, port: 22, username, privateKey, readyTimeout: 15000 });
+      conn.connect({ host, port: (deployInfo && deployInfo.port) || 22, username, privateKey, readyTimeout: 15000 });
     });
 
     if (spinner) spinner.stop();

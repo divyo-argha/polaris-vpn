@@ -98,7 +98,13 @@ export const rotateKeys = async (options = {}) => {
   onProgress('Generating new key pair...');
   const newKeys = generateKeyPair();
 
-  const privateKey = getDefaultPrivateKey();
+  let privateKey = null;
+  if (info.identity && fs.existsSync(info.identity)) {
+    privateKey = fs.readFileSync(info.identity);
+  } else {
+    privateKey = getDefaultPrivateKey();
+  }
+
   if (!privateKey) {
     throw new Error('No SSH private key found. Configure ~/.ssh/id_rsa or id_ed25519.');
   }
@@ -124,7 +130,7 @@ export const rotateKeys = async (options = {}) => {
         onProgress('Updating server configuration with new public key...');
         const newConf = currentConf.replace(oldClientKey, newKeys.publicKey);
 
-        const writeCmd = `cat << 'POLARISEOF' > /tmp/${ifaceName}_new.conf\n${newConf}\nPOLARISOF\nsudo mv /tmp/${ifaceName}_new.conf ${confFile} && sudo chmod 600 ${confFile}`;
+        const writeCmd = `cat << 'POLARISEOF' > /tmp/${ifaceName}_new.conf\n${newConf}\nPOLARISEOF\nsudo mv /tmp/${ifaceName}_new.conf ${confFile} && sudo chmod 600 ${confFile}`;
         const writeRes = await sshExec(conn, writeCmd);
         if (writeRes.code !== 0) throw new Error(`Failed to write updated server config: ${writeRes.stderr}`);
 
@@ -140,7 +146,7 @@ export const rotateKeys = async (options = {}) => {
       }
     }).on('error', reject);
 
-    conn.connect({ host, port: 22, username, privateKey, readyTimeout: 10000 });
+    conn.connect({ host, port: info.port || 22, username, privateKey, readyTimeout: 10000 });
   });
 
   // Update local client conf with new keys

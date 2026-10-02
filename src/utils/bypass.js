@@ -69,9 +69,28 @@ export const applyBypassRules = async () => {
     for (const ip of ips) {
       try {
         if (platform === 'darwin') {
-          spawnSync('sudo', ['route', '-n', 'add', '-host', ip, gateway], { stdio: 'ignore' });
+          spawnSync('sudo', ['-n', 'route', '-n', 'add', '-host', ip, gateway], { stdio: 'ignore' });
         } else if (platform === 'linux') {
-          spawnSync('sudo', ['ip', 'route', 'add', ip, 'via', gateway], { stdio: 'ignore' });
+          spawnSync('sudo', ['-n', 'ip', 'route', 'add', ip, 'via', gateway], { stdio: 'ignore' });
+        }
+      } catch (e) {}
+    }
+  }
+};
+
+export const clearBypassRules = async () => {
+  const rules = getBypassRules();
+  if (rules.length === 0) return;
+
+  const platform = os.platform();
+  for (const rule of rules) {
+    const ips = await resolveTargetIps(rule);
+    for (const ip of ips) {
+      try {
+        if (platform === 'darwin') {
+          spawnSync('sudo', ['-n', 'route', '-n', 'delete', '-host', ip], { stdio: 'ignore' });
+        } else if (platform === 'linux') {
+          spawnSync('sudo', ['-n', 'ip', 'route', 'del', ip], { stdio: 'ignore' });
         }
       } catch (e) {}
     }

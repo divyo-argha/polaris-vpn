@@ -19,6 +19,8 @@ export default async (options) => {
     const res = await deployServer(server, {
       privateKey: options.identity,
       password: options.password,
+      port: options.port ? parseInt(options.port, 10) : 22,
+      mode: options.mode || 'wireguard',
       onProgress: (msg) => {
         if (spinner) spinner.text = msg;
       }

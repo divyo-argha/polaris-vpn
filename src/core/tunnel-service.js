@@ -4,7 +4,8 @@ import { spawnSync } from 'child_process';
 import { spawnSSH, waitForSocks } from '../tunnel/ssh.js';
 import { startTlsBackground } from '../tunnel/tls.js';
 import { startWgTunnel, stopWgTunnel } from '../tunnel/wg.js';
-import { enableKillSwitch, disableKillSwitch } from '../utils/kill-switch.js';
+import { enableKillSwitch, disableKillSwitch, getKillSwitchConfig } from '../utils/kill-switch.js';
+import { clearBypassRules } from '../utils/bypass.js';
 import { loadDaemonState, clearDaemonState, killPid, saveDaemonState } from '../utils/daemon.js';
 import { TUNNEL_PID_FILE, TUNNEL_CONFIG_FILE, CONFIG_DIR, ensureDir } from '../utils/config.js';
 
@@ -43,6 +44,7 @@ export const stopActiveTunnel = (isJson = false) => {
       killPid(info.pid);
     }
   }
+  clearBypassRules().catch(() => {});
   clearDaemonState(TUNNEL_PID_FILE, TUNNEL_CONFIG_FILE);
   return info;
 };
@@ -70,7 +72,9 @@ export const startTunnel = async (server, port, mode = 'ssh', isJson = false) =>
       startTime: new Date().toISOString()
     });
 
-    enableKillSwitch(server);
+    if (getKillSwitchConfig()) {
+      enableKillSwitch(server);
+    }
     return { pid, server, port: 0, mode: mode };
   } 
   
