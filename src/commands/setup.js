@@ -11,8 +11,8 @@ export const runEnvironmentDiagnostic = () => {
   const nodeMajor = parseInt(process.versions.node.split('.')[0], 10);
   results.push({
     item: 'Node.js Runtime',
-    status: nodeMajor >= 18 ? 'PASS' : 'WARN',
-    detail: `v${process.versions.node} (>= 18 required)`
+    status: nodeMajor >= 20 ? 'PASS' : 'WARN',
+    detail: `v${process.versions.node} (>= 20 required)`
   });
 
   // Check WireGuard CLI

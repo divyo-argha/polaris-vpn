@@ -8,7 +8,7 @@
   <a href="https://www.npmjs.com/package/polaris-vpn"><img src="https://img.shields.io/npm/v/polaris-vpn?style=flat-square&color=88c0d0" alt="NPM Version" /></a>
   <a href="https://www.npmjs.com/package/polaris-vpn"><img src="https://img.shields.io/npm/dt/polaris-vpn?style=flat-square&color=a3be8c" alt="Downloads" /></a>
   <a href="https://github.com/Divyo/polaris-vpn/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-5e81ac?style=flat-square" alt="License" /></a>
-  <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square" alt="Node Version" />
+  <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square" alt="Node Version" />
 </p>
 
 ---
@@ -35,7 +35,7 @@ You get a clean, dedicated IP, paid-grade speed, and total ownership over your t
 
 ## Quick Install
 
-Requires **Node.js 18 or higher** on your local machine:
+Requires **Node.js 20 or higher** on your local machine:
 
 ```bash
 npm install -g polaris-vpn

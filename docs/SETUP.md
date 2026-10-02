@@ -9,7 +9,7 @@ This guide walks you through setting up Polaris VPN from scratch. By the end, yo
 Before starting, you only need two things:
 
 1. **A Linux server (VPS)**: Any clean instance of Ubuntu (22.04 or 24.04), Debian (11 or 12), Oracle Linux (8 or 9), Rocky Linux, or Fedora. If you don't have one, Oracle Cloud gives you one [free forever](./ORACLE_CLOUD.md).
-2. **Node.js 18 or newer** installed on your laptop/computer.
+2. **Node.js 20 or newer** installed on your laptop/computer.
 
 ---
 

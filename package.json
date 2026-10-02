@@ -28,7 +28,7 @@
     "url": "https://github.com/sponsors/Divyo"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "scripts": {
     "start": "node ./src/cli.js",
