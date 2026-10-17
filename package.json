@@ -11,8 +11,7 @@
     "src",
     "docs",
     "README.md",
-    "LICENSE",
-    "CHANGELOG.md"
+    "LICENSE"
   ],
   "repository": {
     "type": "git",
